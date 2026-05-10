@@ -115,7 +115,7 @@ header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display
   <div class="logo">MH CUSTOMS<small data-i18n="appSub"></small></div>
   <div class="header-right">
     <span id="sync-status"></span>
-    <button class="btn-sync" id="btn-sync" onclick="pullFromGist()" title="Pull latest from cloud">↻</button>
+    <button class="btn-sync" id="btn-sync" onclick="pullFromWorker(false)" title="Pull latest from cloud">↻</button>
     <button class="btn-lang" id="lang-btn" onclick="toggleLang()"></button>
     <button class="btn-new" id="btn-new" onclick="openNew()"></button>
   </div>
@@ -166,11 +166,8 @@ header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display
 
 <script>
 // ── Config ───────────────────────────────────────────────────────────
-const PIN      = '8842';
-const GIST_ID  = 'd1dedff261550fdc42f5d900556e87cd';
-const GIST_TOK = 'ghp_LIChFx' + 'gzSllLN8Wv' + 'wQLRFVVKSE9yvF1QzLZK';
-const GIST_FILE= 'orders.json';
-const GIST_URL = `https://api.github.com/gists/${GIST_ID}`;
+// WORKER_URL: set this after deploying your Cloudflare Worker
+const WORKER_URL = 'https://mhc-order-tracker.workers.dev';
 
 // ── Translations ──────────────────────────────────────────────────────
 const T = {
@@ -223,19 +220,9 @@ function toggleLang() {
 }
 
 // ── State ─────────────────────────────────────────────────────────────
-const _raw = localStorage.getItem('mhc-orders');
-console.log('[MHC] page load — mhc-orders raw:', _raw);
-console.log('[MHC] page load — mhc-saved-at:', localStorage.getItem('mhc-saved-at'));
-console.log('[MHC] page load — sessionAuth:', sessionStorage.getItem('mhc-auth'));
-
-let orders = JSON.parse(_raw || '[]');
+let orders = JSON.parse(localStorage.getItem('mhc-orders') || '[]');
+let pin    = localStorage.getItem('mhc-pin') || '';
 let cid = null, syncTimer = null;
-
-// If we have orders but no real timestamp, stamp them now
-if (orders.length > 0 && parseInt(localStorage.getItem('mhc-saved-at') || '0', 10) === 0) {
-  localStorage.setItem('mhc-saved-at', String(Date.now()));
-  console.log('[MHC] stamped mhc-saved-at with', localStorage.getItem('mhc-saved-at'));
-}
 
 // ── PIN ───────────────────────────────────────────────────────────────
 (function initPin() {
@@ -243,16 +230,48 @@ if (orders.length > 0 && parseInt(localStorage.getItem('mhc-saved-at') || '0', 1
   const ps = document.getElementById('pin-screen');
   const pi = document.getElementById('pin-input');
   const pe = document.getElementById('pin-err');
-  if (sessionStorage.getItem('mhc-auth') === '1') { ps.classList.add('hidden'); startBoard(); return; }
+
+  // If we already have a saved PIN, verify it quietly then start
+  if (pin) {
+    verifyPin(pin).then(ok => {
+      if (ok) { ps.classList.add('hidden'); startBoard(); }
+      else {
+        // Saved PIN is wrong (PIN was changed) — clear and ask again
+        pin = ''; localStorage.removeItem('mhc-pin');
+        pi.focus();
+      }
+    });
+    return;
+  }
+
   pi.focus();
-  pi.addEventListener('input', () => {
+  pi.addEventListener('input', async () => {
     pe.textContent = '';
-    if (pi.value.length >= PIN.length) {
-      if (pi.value === PIN) { sessionStorage.setItem('mhc-auth','1'); ps.classList.add('hidden'); startBoard(); }
-      else { pe.textContent = t('pinErr'); pi.value = ''; pi.focus(); }
+    if (pi.value.length >= 4) {
+      const candidate = pi.value.trim();
+      const ok = await verifyPin(candidate);
+      if (ok) {
+        pin = candidate;
+        localStorage.setItem('mhc-pin', pin);
+        ps.classList.add('hidden');
+        startBoard();
+      } else {
+        pe.textContent = t('pinErr');
+        pi.value = '';
+        pi.focus();
+      }
     }
   });
 })();
+
+async function verifyPin(p) {
+  try {
+    const r = await fetch(WORKER_URL + '/orders', {
+      headers: { 'X-PIN': p }
+    });
+    return r.ok;
+  } catch { return false; }
+}
 
 function startBoard() { render(); initSync(); }
 
@@ -262,57 +281,54 @@ function setStatus(state, key) {
   el.className = state; el.textContent = t(key);
 }
 
-// On page load: push local data to Gist (never pull — localStorage is sacred).
-// If localStorage is empty (fresh browser), pull from Gist once.
+// On load: always pull latest from Worker (server is source of truth).
+// Falls back gracefully to localStorage if offline.
 async function initSync() {
-  const localOrders = JSON.parse(localStorage.getItem('mhc-orders') || '[]');
-  console.log('[MHC] initSync — localOrders.length:', localOrders.length);
-  if (localOrders.length === 0) {
-    console.log('[MHC] initSync — no local data, pulling from Gist');
-    await pullFromGist(true);
-  } else {
-    console.log('[MHC] initSync — have local data, pushing to Gist only');
-    const ts = parseInt(localStorage.getItem('mhc-saved-at') || '0', 10) || Date.now();
-    localStorage.setItem('mhc-saved-at', String(ts));
-    pushToGist(ts);
-  }
+  await pullFromWorker(true);
 }
 
-// Pull from Gist — only called on fresh browser OR when user clicks ↻
-async function pullFromGist(silent) {
-  if (!silent) setStatus('syncing','syncing');
+async function pullFromWorker(silent) {
+  if (!silent) setStatus('syncing', 'syncing');
   try {
-    const r = await fetch(GIST_URL+'?t='+Date.now(), {
-      headers:{Authorization:'token '+GIST_TOK, Accept:'application/vnd.github+json'}
+    const r = await fetch(WORKER_URL + '/orders?t=' + Date.now(), {
+      headers: { 'X-PIN': pin }
     });
-    if (!r.ok) throw 0;
+    if (!r.ok) throw new Error('auth');
     const data = await r.json();
-    const raw = JSON.parse(data.files[GIST_FILE]?.content || '[]');
-    const gistOrders = Array.isArray(raw) ? raw : (raw.orders || []);
-    const gistSavedAt = Array.isArray(raw) ? 0 : (raw.savedAt || 0);
-    orders = gistOrders;
-    localStorage.setItem('mhc-orders', JSON.stringify(orders));
-    localStorage.setItem('mhc-saved-at', String(gistSavedAt || Date.now()));
-    setStatus('ok','synced');
+    const remote = Array.isArray(data) ? data : (data.orders || []);
+    const remoteSavedAt = data.savedAt || 0;
+    const localSavedAt  = parseInt(localStorage.getItem('mhc-saved-at') || '0', 10);
+
+    // Take whichever side is newer
+    if (remoteSavedAt >= localSavedAt) {
+      orders = remote;
+      localStorage.setItem('mhc-orders', JSON.stringify(orders));
+      localStorage.setItem('mhc-saved-at', String(remoteSavedAt));
+    } else {
+      // Local is newer — push it up
+      await pushToWorker(localSavedAt, true);
+    }
+    setStatus('ok', 'synced');
     render();
   } catch(e) {
-    setStatus('error','offline');
+    setStatus('error', 'offline');
   }
 }
 
-// Push to Gist — called after every save and on load (to keep Gist current)
-async function pushToGist(savedAt) {
+async function pushToWorker(savedAt, silent) {
   const ts = savedAt || Date.now();
-  setStatus('syncing','syncing');
+  if (!silent) setStatus('syncing', 'syncing');
   try {
-    const r = await fetch(GIST_URL, {
-      method:'PATCH',
-      headers:{Authorization:'token '+GIST_TOK,'Content-Type':'application/json',Accept:'application/vnd.github+json'},
-      body: JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify({savedAt:ts,orders},null,2)}}})
+    const r = await fetch(WORKER_URL + '/orders', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-PIN': pin },
+      body: JSON.stringify({ savedAt: ts, orders })
     });
     if (!r.ok) throw 0;
-    setStatus('ok','synced');
-  } catch(e) { setStatus('error','saveFailed'); }
+    if (!silent) setStatus('ok', 'synced');
+  } catch(e) {
+    setStatus('error', 'saveFailed');
+  }
 }
 
 function persist() {
@@ -320,7 +336,7 @@ function persist() {
   localStorage.setItem('mhc-orders', JSON.stringify(orders));
   localStorage.setItem('mhc-saved-at', String(now));
   clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => pushToGist(now), 800);
+  syncTimer = setTimeout(() => pushToWorker(now), 800);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
