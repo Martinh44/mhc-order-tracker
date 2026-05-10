@@ -222,6 +222,21 @@ function toggleLang() {
   if (document.getElementById('overlay').classList.contains('open')) openModal(cid);
 }
 
+// ── State ─────────────────────────────────────────────────────────────
+const _raw = localStorage.getItem('mhc-orders');
+console.log('[MHC] page load — mhc-orders raw:', _raw);
+console.log('[MHC] page load — mhc-saved-at:', localStorage.getItem('mhc-saved-at'));
+console.log('[MHC] page load — sessionAuth:', sessionStorage.getItem('mhc-auth'));
+
+let orders = JSON.parse(_raw || '[]');
+let cid = null, syncTimer = null;
+
+// If we have orders but no real timestamp, stamp them now
+if (orders.length > 0 && parseInt(localStorage.getItem('mhc-saved-at') || '0', 10) === 0) {
+  localStorage.setItem('mhc-saved-at', String(Date.now()));
+  console.log('[MHC] stamped mhc-saved-at with', localStorage.getItem('mhc-saved-at'));
+}
+
 // ── PIN ───────────────────────────────────────────────────────────────
 (function initPin() {
   applyLang();
@@ -238,21 +253,6 @@ function toggleLang() {
     }
   });
 })();
-
-// ── State ─────────────────────────────────────────────────────────────
-const _raw = localStorage.getItem('mhc-orders');
-console.log('[MHC] page load — mhc-orders raw:', _raw);
-console.log('[MHC] page load — mhc-saved-at:', localStorage.getItem('mhc-saved-at'));
-console.log('[MHC] page load — sessionAuth:', sessionStorage.getItem('mhc-auth'));
-
-let orders = JSON.parse(_raw || '[]');
-let cid = null, syncTimer = null;
-
-// If we have orders but no real timestamp, stamp them now
-if (orders.length > 0 && parseInt(localStorage.getItem('mhc-saved-at') || '0', 10) === 0) {
-  localStorage.setItem('mhc-saved-at', String(Date.now()));
-  console.log('[MHC] stamped mhc-saved-at with', localStorage.getItem('mhc-saved-at'));
-}
 
 function startBoard() { render(); initSync(); }
 
