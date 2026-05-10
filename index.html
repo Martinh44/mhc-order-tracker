@@ -240,6 +240,12 @@ function toggleLang() {
 let orders = JSON.parse(localStorage.getItem('mhc-orders') || '[]');
 let cid = null, syncTimer = null;
 
+// If we have orders but no real timestamp (pre-timestamp data), stamp them now
+// so the Gist can never falsely "win" on first load
+if (orders.length > 0 && parseInt(localStorage.getItem('mhc-saved-at') || '0', 10) === 0) {
+  localStorage.setItem('mhc-saved-at', String(Date.now()));
+}
+
 function startBoard() { render(); loadFromGist(); }
 
 // ── Sync ──────────────────────────────────────────────────────────────
@@ -272,7 +278,8 @@ async function loadFromGist() {
       orders = gistOrders;
       localStorage.setItem('mhc-orders', JSON.stringify(orders));
       localStorage.setItem('mhc-saved-at', String(gistSavedAt || Date.now()));
-    } else if (gistSavedAt > localSavedAt && gistOrders.length > 0) {
+    } else if (gistSavedAt > 0 && gistSavedAt > localSavedAt && gistOrders.length > 0) {
+      // Only trust Gist if it has a real timestamp (>0) AND is strictly newer
       orders = gistOrders;
       localStorage.setItem('mhc-orders', JSON.stringify(orders));
       localStorage.setItem('mhc-saved-at', String(gistSavedAt));
