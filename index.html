@@ -240,13 +240,18 @@ function toggleLang() {
 })();
 
 // ── State ─────────────────────────────────────────────────────────────
-let orders = JSON.parse(localStorage.getItem('mhc-orders') || '[]');
+const _raw = localStorage.getItem('mhc-orders');
+console.log('[MHC] page load — mhc-orders raw:', _raw);
+console.log('[MHC] page load — mhc-saved-at:', localStorage.getItem('mhc-saved-at'));
+console.log('[MHC] page load — sessionAuth:', sessionStorage.getItem('mhc-auth'));
+
+let orders = JSON.parse(_raw || '[]');
 let cid = null, syncTimer = null;
 
-// If we have orders but no real timestamp (pre-timestamp data), stamp them now
-// so the Gist can never falsely "win" on first load
+// If we have orders but no real timestamp, stamp them now
 if (orders.length > 0 && parseInt(localStorage.getItem('mhc-saved-at') || '0', 10) === 0) {
   localStorage.setItem('mhc-saved-at', String(Date.now()));
+  console.log('[MHC] stamped mhc-saved-at with', localStorage.getItem('mhc-saved-at'));
 }
 
 function startBoard() { render(); initSync(); }
@@ -261,11 +266,12 @@ function setStatus(state, key) {
 // If localStorage is empty (fresh browser), pull from Gist once.
 async function initSync() {
   const localOrders = JSON.parse(localStorage.getItem('mhc-orders') || '[]');
+  console.log('[MHC] initSync — localOrders.length:', localOrders.length);
   if (localOrders.length === 0) {
-    // Fresh browser — pull from Gist
+    console.log('[MHC] initSync — no local data, pulling from Gist');
     await pullFromGist(true);
   } else {
-    // Have local data — push it to Gist to keep in sync, never overwrite local
+    console.log('[MHC] initSync — have local data, pushing to Gist only');
     const ts = parseInt(localStorage.getItem('mhc-saved-at') || '0', 10) || Date.now();
     localStorage.setItem('mhc-saved-at', String(ts));
     pushToGist(ts);
