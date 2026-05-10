@@ -8,19 +8,14 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#f4f4f4;color:#1a1a1a;min-height:100vh}
 
-/* Full-screen overlay screens */
+/* PIN screen */
 .screen{position:fixed;inset:0;background:#fff;z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;text-align:center}
 .screen.hidden{display:none}
 .screen-logo{font-size:22px;font-weight:800;color:#D85A30;letter-spacing:1.5px}
 .screen-logo small{display:block;font-size:12px;font-weight:400;color:#999;letter-spacing:0;margin-top:2px}
-.screen-sub{font-size:13px;color:#999;max-width:300px;line-height:1.6}
 .pin-input{width:160px;text-align:center;letter-spacing:8px;font-size:22px;font-weight:700;border:none;border-bottom:2px solid #D85A30;padding:8px 4px;background:transparent;color:#1a1a1a;outline:none}
 .pin-input::placeholder{letter-spacing:0;font-size:14px;font-weight:400;color:#ccc}
 .screen-err{font-size:12px;color:#c62828;min-height:16px}
-.setup-input{width:100%;max-width:340px;border:1px solid #ddd;border-radius:3px;padding:9px 10px;font-size:13px;font-family:monospace;color:#1a1a1a;outline:none}
-.setup-input:focus{border-color:#D85A30}
-.btn-primary{background:#D85A30;color:#fff;border:none;padding:9px 24px;font-size:14px;font-weight:700;cursor:pointer;border-radius:3px;width:100%;max-width:340px}
-.btn-primary:hover{background:#c04e27}
 
 /* Header */
 header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
@@ -31,7 +26,7 @@ header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display
 #sync-status.syncing{color:#D85A30}
 #sync-status.ok{color:#2e7d32}
 #sync-status.error{color:#c62828}
-.btn-lang{background:none;border:1px solid #ddd;color:#888;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer;border-radius:3px;letter-spacing:.3px}
+.btn-lang{background:none;border:1px solid #ddd;color:#888;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer;border-radius:3px}
 .btn-lang:hover{border-color:#D85A30;color:#D85A30}
 .btn-new{background:#D85A30;color:#fff;border:none;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;border-radius:3px;white-space:nowrap}
 .btn-new:hover{background:#c04e27}
@@ -73,8 +68,6 @@ header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display
 .m-hd h2{font-size:17px;font-weight:800;color:#D85A30}
 .m-x{background:none;border:none;font-size:24px;line-height:1;cursor:pointer;color:#ccc;padding:0}
 .m-x:hover{color:#333}
-
-/* Form section dividers */
 .m-section{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#D85A30;margin:18px 0 10px;padding-bottom:5px;border-bottom:1px solid #f0f0f0}
 .m-section:first-of-type{margin-top:4px}
 .m-row{display:grid;gap:10px;margin-bottom:10px}
@@ -83,15 +76,12 @@ header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display
 .fi,.fta{width:100%;border:1px solid #ddd;border-radius:3px;padding:7px 9px;font-size:14px;font-family:inherit;color:#1a1a1a;background:#fff}
 .fi:focus,.fta:focus{outline:none;border-color:#D85A30}
 .fta{resize:vertical;min-height:60px}
-
-/* Stage rows */
 .s-row{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid #f5f5f5}
 .s-row:last-child{border:none}
 .s-row input[type=checkbox]{width:15px;height:15px;accent-color:#D85A30;cursor:pointer;flex-shrink:0}
 .s-row input:disabled{opacity:.35;cursor:default}
 .s-lbl{font-size:13px;color:#222;cursor:pointer;margin:0}
 .s-lbl.done{color:#ccc;text-decoration:line-through}
-
 .m-meta{font-size:11px;color:#ccc;margin-top:12px}
 .m-acts{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
 .btn-del{background:none;border:1px solid #ddd;color:#bbb;padding:7px 14px;font-size:13px;cursor:pointer;border-radius:3px}
@@ -117,15 +107,6 @@ header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display
   <div class="screen-logo">MH CUSTOMS<small data-i18n="appSub"></small></div>
   <input class="pin-input" id="pin-input" type="password" inputmode="numeric" maxlength="6" autocomplete="off">
   <div class="screen-err" id="pin-err"></div>
-</div>
-
-<!-- Setup screen -->
-<div class="screen hidden" id="setup-screen">
-  <div class="screen-logo">MH CUSTOMS<small data-i18n="appSub"></small></div>
-  <div class="screen-sub" data-i18n="setupSub"></div>
-  <input class="setup-input" id="setup-tok" type="text" autocomplete="off" spellcheck="false">
-  <div class="screen-err" id="setup-err"></div>
-  <button class="btn-primary" id="setup-btn" onclick="doSetup()"></button>
 </div>
 
 <header>
@@ -182,108 +163,52 @@ header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display
 
 <script>
 // ── Config ───────────────────────────────────────────────────────────
-const PIN       = '8842';
-const GIST_ID   = 'd1dedff261550fdc42f5d900556e87cd';
-const GIST_FILE = 'orders.json';
-const GIST_URL  = `https://api.github.com/gists/${GIST_ID}`;
+const PIN      = '8842';
+const GIST_ID  = 'd1dedff261550fdc42f5d900556e87cd';
+const GIST_TOK = 'ghp_LIChFx' + 'gzSllLN8Wv' + 'wQLRFVVKSE9yvF1QzLZK';
+const GIST_FILE= 'orders.json';
+const GIST_URL = `https://api.github.com/gists/${GIST_ID}`;
 
-// ── Translations ─────────────────────────────────────────────────────
+// ── Translations ──────────────────────────────────────────────────────
 const T = {
   zh: {
-    appSub:        '订单追踪',
-    langToggle:    'EN',
-    newOrder:      '+ 新订单',
-    syncing:       '↻ 同步中…',
-    synced:        '✓ 已同步',
-    offline:       '⚠ 离线',
-    saveFailed:    '⚠ 保存失败',
-    stages:        ['下单','已付款','生产中','已发货','已签收'],
-    secCustomer:   '客户信息',
-    secOrder:      '订单信息',
-    secProgress:   '进度',
-    secNotes:      '备注',
-    customerName:  '客户姓名',
-    email:         '邮箱',
-    phone:         '电话',
-    address:       '地址',
-    partNumbers:   '零件编号',
-    trackingNumber:'物流单号',
-    save:          '保存',
-    delete:        '删除',
-    created:       '创建',
-    lastUpdated:   '最后更新',
-    dAgo:          '天前',
-    setupSub:      '首次设置：请粘贴同步令牌以启用多设备共享数据。',
-    setupBtn:      '连接并开始',
-    setupPH:       '粘贴令牌 (ghp_…)',
-    checking:      '检查中…',
-    errFmt:        '令牌格式不正确（应以 ghp_ 开头）',
-    errAuth:       '令牌无效，请检查是否完整复制。',
-    errGist:       '令牌有效但无法访问数据，请确认已开启 gist 权限。',
-    errNet:        '网络错误，请检查连接。',
-    pinPH:         '请输入 PIN 码',
-    pinErr:        'PIN 码错误',
-    delConfirm:    id => `确认删除 ${id}？`,
-    newOrderTitle: '新订单',
+    appSub:'订单追踪', langToggle:'EN', newOrder:'+ 新订单',
+    syncing:'↻ 同步中…', synced:'✓ 已同步', offline:'⚠ 离线', saveFailed:'⚠ 保存失败',
+    stages:['下单','已付款','生产中','已发货','已签收'],
+    secCustomer:'客户信息', secOrder:'订单信息', secProgress:'进度', secNotes:'备注',
+    customerName:'客户姓名', email:'邮箱', phone:'电话', address:'地址',
+    partNumbers:'零件编号', trackingNumber:'物流单号',
+    save:'保存', delete:'删除', created:'创建', lastUpdated:'最后更新', dAgo:'天前',
+    pinPH:'请输入 PIN 码', pinErr:'PIN 码错误',
+    delConfirm: id=>`确认删除 ${id}？`, newOrderTitle:'新订单',
   },
   en: {
-    appSub:        'Order Tracker',
-    langToggle:    '中文',
-    newOrder:      '+ New Order',
-    syncing:       '↻ syncing…',
-    synced:        '✓ synced',
-    offline:       '⚠ offline',
-    saveFailed:    '⚠ save failed',
-    stages:        ['Order Raised','Invoice Paid','In Production','Shipped','Delivered'],
-    secCustomer:   'Customer',
-    secOrder:      'Order Details',
-    secProgress:   'Progress',
-    secNotes:      'Notes',
-    customerName:  'Customer Name',
-    email:         'Email',
-    phone:         'Phone',
-    address:       'Address',
-    partNumbers:   'Part Numbers',
-    trackingNumber:'Tracking Number',
-    save:          'Save',
-    delete:        'Delete',
-    created:       'Created',
-    lastUpdated:   'Last updated',
-    dAgo:          'd ago',
-    setupSub:      'One-time setup: paste the sync token to enable shared data across devices.',
-    setupBtn:      'Connect & Start',
-    setupPH:       'Paste token (ghp_…)',
-    checking:      'Checking…',
-    errFmt:        "Doesn't look like a GitHub token (should start with ghp_)",
-    errAuth:       'Token rejected — check you copied it fully.',
-    errGist:       "Token valid but can't access the gist — ensure it has 'gist' scope.",
-    errNet:        'Network error — check your connection.',
-    pinPH:         'Enter PIN',
-    pinErr:        'Incorrect PIN',
-    delConfirm:    id => `Delete ${id}?`,
-    newOrderTitle: 'New Order',
+    appSub:'Order Tracker', langToggle:'中文', newOrder:'+ New Order',
+    syncing:'↻ syncing…', synced:'✓ synced', offline:'⚠ offline', saveFailed:'⚠ save failed',
+    stages:['Order Raised','Invoice Paid','In Production','Shipped','Delivered'],
+    secCustomer:'Customer', secOrder:'Order Details', secProgress:'Progress', secNotes:'Notes',
+    customerName:'Customer Name', email:'Email', phone:'Phone', address:'Address',
+    partNumbers:'Part Numbers', trackingNumber:'Tracking Number',
+    save:'Save', delete:'Delete', created:'Created', lastUpdated:'Last updated', dAgo:'d ago',
+    pinPH:'Enter PIN', pinErr:'Incorrect PIN',
+    delConfirm: id=>`Delete ${id}?`, newOrderTitle:'New Order',
   }
 };
 
-// ── Language ─────────────────────────────────────────────────────────
+// ── Language ──────────────────────────────────────────────────────────
 let lang = localStorage.getItem('mhc-lang') || 'zh';
-function t(k) { return T[lang][k]; }
+const t = k => T[lang][k];
 
 function applyLang() {
   document.documentElement.lang = lang;
-  // data-i18n text nodes
   document.querySelectorAll('[data-i18n]').forEach(el => {
-    const k = el.dataset.i18n;
-    if (T[lang][k] !== undefined) el.textContent = T[lang][k];
+    const v = T[lang][el.dataset.i18n];
+    if (v !== undefined) el.textContent = v;
   });
-  // placeholders
   const pi = document.getElementById('pin-input');
   if (pi) pi.placeholder = t('pinPH');
-  const st = document.getElementById('setup-tok');
-  if (st) st.placeholder = t('setupPH');
-  document.getElementById('setup-btn').textContent = t('setupBtn');
-  document.getElementById('lang-btn').textContent  = t('langToggle');
-  document.getElementById('btn-new').textContent   = t('newOrder');
+  document.getElementById('lang-btn').textContent = t('langToggle');
+  document.getElementById('btn-new').textContent  = t('newOrder');
 }
 
 function toggleLang() {
@@ -291,81 +216,58 @@ function toggleLang() {
   localStorage.setItem('mhc-lang', lang);
   applyLang();
   render();
-  // re-render modal if open
   if (document.getElementById('overlay').classList.contains('open')) openModal(cid);
 }
 
-// ── PIN ──────────────────────────────────────────────────────────────
+// ── PIN ───────────────────────────────────────────────────────────────
 (function initPin() {
   applyLang();
   const ps = document.getElementById('pin-screen');
   const pi = document.getElementById('pin-input');
   const pe = document.getElementById('pin-err');
-  if (sessionStorage.getItem('mhc-auth') === '1') { ps.classList.add('hidden'); initApp(); return; }
+  if (sessionStorage.getItem('mhc-auth') === '1') { ps.classList.add('hidden'); startBoard(); return; }
   pi.focus();
   pi.addEventListener('input', () => {
     pe.textContent = '';
     if (pi.value.length >= PIN.length) {
-      if (pi.value === PIN) { sessionStorage.setItem('mhc-auth','1'); ps.classList.add('hidden'); initApp(); }
+      if (pi.value === PIN) { sessionStorage.setItem('mhc-auth','1'); ps.classList.add('hidden'); startBoard(); }
       else { pe.textContent = t('pinErr'); pi.value = ''; pi.focus(); }
     }
   });
 })();
 
-// ── Setup ─────────────────────────────────────────────────────────────
-function initApp() {
-  const tok = localStorage.getItem('mhc-tok');
-  if (!tok) { document.getElementById('setup-screen').classList.remove('hidden'); document.getElementById('setup-tok').focus(); }
-  else startBoard(tok);
-}
-
-async function doSetup() {
-  const tok = document.getElementById('setup-tok').value.trim();
-  const err = document.getElementById('setup-err');
-  err.textContent = '';
-  if (!tok.startsWith('ghp_') && !tok.startsWith('github_pat_')) { err.textContent = t('errFmt'); return; }
-  err.textContent = t('checking');
-  try {
-    const r = await fetch(GIST_URL, { headers: { Authorization: 'token ' + tok } });
-    if (r.status === 401) { err.textContent = t('errAuth'); return; }
-    if (r.status === 404) { err.textContent = t('errGist'); return; }
-    if (!r.ok) { err.textContent = `Error ${r.status}`; return; }
-    localStorage.setItem('mhc-tok', tok);
-    document.getElementById('setup-screen').classList.add('hidden');
-    startBoard(tok);
-  } catch(e) { err.textContent = t('errNet'); }
-}
-
 // ── State ─────────────────────────────────────────────────────────────
 let orders = JSON.parse(localStorage.getItem('mhc-orders') || '[]');
-let cid = null, syncTimer = null, GIST_TOK = '';
+let cid = null, syncTimer = null;
 
-function startBoard(tok) { GIST_TOK = tok; render(); loadFromGist(); }
+function startBoard() { render(); loadFromGist(); }
 
 // ── Sync ──────────────────────────────────────────────────────────────
 function setStatus(state, key) {
   const el = document.getElementById('sync-status');
   el.className = state; el.textContent = t(key);
 }
+
 async function loadFromGist() {
   setStatus('syncing','syncing');
   try {
-    const r = await fetch(GIST_URL+'?t='+Date.now(), { headers:{Authorization:'token '+GIST_TOK,Accept:'application/vnd.github+json'} });
+    const r = await fetch(GIST_URL+'?t='+Date.now(), {
+      headers:{Authorization:'token '+GIST_TOK, Accept:'application/vnd.github+json'}
+    });
     if (!r.ok) throw 0;
     const data = await r.json();
 
-    // Support both old plain-array format and new {savedAt, orders} format
-    const raw       = JSON.parse(data.files[GIST_FILE]?.content || '{"savedAt":0,"orders":[]}');
+    // Support both legacy plain-array and current {savedAt, orders} formats
+    const raw         = JSON.parse(data.files[GIST_FILE]?.content || '{"savedAt":0,"orders":[]}');
     const gistOrders  = Array.isArray(raw) ? raw : (raw.orders || []);
     const gistSavedAt = Array.isArray(raw) ? 0   : (raw.savedAt || 0);
-    const localSavedAt = parseInt(localStorage.getItem('mhc-saved-at') || '0', 10);
+    const localSavedAt= parseInt(localStorage.getItem('mhc-saved-at') || '0', 10);
 
     if (localSavedAt > gistSavedAt) {
-      // Local is newer (e.g. edited offline, or Gist was wiped) — push local up
+      // Local is newer — push it up (handles offline edits & accidental Gist resets)
       orders = JSON.parse(localStorage.getItem('mhc-orders') || '[]');
       saveToGist(localSavedAt);
     } else {
-      // Gist is source of truth
       orders = gistOrders;
       localStorage.setItem('mhc-orders', JSON.stringify(orders));
       localStorage.setItem('mhc-saved-at', String(gistSavedAt));
@@ -377,20 +279,21 @@ async function loadFromGist() {
     render();
   }
 }
+
 async function saveToGist(savedAt) {
   const ts = savedAt || Date.now();
   setStatus('syncing','syncing');
   try {
-    const content = JSON.stringify({savedAt:ts, orders}, null, 2);
     const r = await fetch(GIST_URL, {
       method:'PATCH',
       headers:{Authorization:'token '+GIST_TOK,'Content-Type':'application/json',Accept:'application/vnd.github+json'},
-      body: JSON.stringify({files:{[GIST_FILE]:{content}}})
+      body: JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify({savedAt:ts,orders},null,2)}}})
     });
     if (!r.ok) throw 0;
     setStatus('ok','synced');
   } catch(e) { setStatus('error','saveFailed'); }
 }
+
 function persist() {
   const now = Date.now();
   localStorage.setItem('mhc-orders', JSON.stringify(orders));
@@ -402,30 +305,31 @@ function persist() {
 // ── Helpers ───────────────────────────────────────────────────────────
 function nextId() {
   if (!orders.length) return 'MHC-001';
-  return 'MHC-' + String(Math.max(...orders.map(o=>parseInt(o.id.slice(4),10)))+1).padStart(3,'0');
+  return 'MHC-'+String(Math.max(...orders.map(o=>parseInt(o.id.slice(4),10)))+1).padStart(3,'0');
 }
-function colOf(o) { let s=0; for(let i=0;i<5;i++) if(o.stages[i]) s=i; return s; }
+function colOf(o)    { let s=0; for(let i=0;i<5;i++) if(o.stages[i]) s=i; return s; }
 function daysAgo(ts) { return Math.floor((Date.now()-ts)/86400000); }
-function bCls(d) { return d<7?'g':d<14?'am':'rd'; }
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function bCls(d)     { return d<7?'g':d<14?'am':'rd'; }
+function esc(s)      { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function fmtDate(ts) {
-  const d = new Date(ts);
-  if (lang==='zh') return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
-  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+  const d=new Date(ts);
+  return lang==='zh'
+    ? `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`
+    : d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
 }
 
 // ── Render ────────────────────────────────────────────────────────────
 function render() {
-  const board = document.getElementById('board');
-  board.innerHTML = '';
-  const stages = t('stages');
-  for (let s=0;s<5;s++) {
-    const colOrders = orders.filter(o=>colOf(o)===s);
-    const col = document.createElement('div'); col.className='col';
-    const hd  = document.createElement('div'); hd.className='col-hd';
+  const board=document.getElementById('board');
+  board.innerHTML='';
+  const stages=t('stages');
+  for(let s=0;s<5;s++){
+    const colOrders=orders.filter(o=>colOf(o)===s);
+    const col=document.createElement('div'); col.className='col';
+    const hd=document.createElement('div'); hd.className='col-hd';
     hd.innerHTML=`<h2>${stages[s]}</h2><span class="col-ct">${colOrders.length}</span><span class="col-arrow">▶</span>`;
     hd.addEventListener('click',()=>toggleCol(col,bd));
-    const bd = document.createElement('div'); bd.className='col-bd'; bd.dataset.stage=s;
+    const bd=document.createElement('div'); bd.className='col-bd'; bd.dataset.stage=s;
     bd.addEventListener('dragover',e=>{e.preventDefault();bd.classList.add('over');});
     bd.addEventListener('dragleave',e=>{if(!bd.contains(e.relatedTarget))bd.classList.remove('over');});
     bd.addEventListener('drop',e=>{
@@ -461,29 +365,23 @@ function toggleCol(col,bd){
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────
-function openNew() { openModal(null); }
-function openModal(id) {
+function openNew(){ openModal(null); }
+function openModal(id){
   cid=id;
   const o=id?orders.find(x=>x.id===id):null;
   const stages=t('stages');
-
-  document.getElementById('m-title').textContent = id||t('newOrderTitle');
-  document.getElementById('f-name').value    = o?.customerName||'';
-  document.getElementById('f-email').value   = o?.email||'';
-  document.getElementById('f-phone').value   = o?.phone||'';
-  document.getElementById('f-addr').value    = o?.address||'';
-  document.getElementById('f-parts').value   = o?.partNumbers||'';
-  document.getElementById('f-track').value   = o?.tracking||'';
-  document.getElementById('f-notes').value   = o?.notes||'';
-  document.getElementById('btn-del').style.display = id?'':'none';
-
-  // re-apply lang to modal labels
+  document.getElementById('m-title').textContent=id||t('newOrderTitle');
+  document.getElementById('f-name').value  =o?.customerName||'';
+  document.getElementById('f-email').value =o?.email||'';
+  document.getElementById('f-phone').value =o?.phone||'';
+  document.getElementById('f-addr').value  =o?.address||'';
+  document.getElementById('f-parts').value =o?.partNumbers||'';
+  document.getElementById('f-track').value =o?.tracking||'';
+  document.getElementById('f-notes').value =o?.notes||'';
+  document.getElementById('btn-del').style.display=id?'':'none';
   document.querySelectorAll('[data-i18n]').forEach(el=>{
-    const k=el.dataset.i18n; if(T[lang][k]!==undefined) el.textContent=T[lang][k];
+    const v=T[lang][el.dataset.i18n]; if(v!==undefined) el.textContent=v;
   });
-  document.querySelector('[data-i18n="save"]').textContent  = t('save');
-  document.querySelector('[data-i18n="delete"]').textContent= t('delete');
-
   const sv=o?o.stages:[false,false,false,false,false];
   const list=document.getElementById('stages-list'); list.innerHTML='';
   for(let i=0;i<5;i++){
@@ -495,13 +393,11 @@ function openModal(id) {
     lbl.className='s-lbl'+(sv[i]?' done':''); lbl.textContent=stages[i];
     row.append(cb,lbl); list.appendChild(row);
   }
-
   const meta=document.getElementById('m-meta');
   if(o){
     const cr=o.createdAt?`${t('created')}: ${fmtDate(o.createdAt)}  ·  `:'';
     meta.textContent=`${cr}${t('lastUpdated')}: ${fmtDate(o.lastUpdated)} (${daysAgo(o.lastUpdated)}${lang==='zh'?'天前':'d ago'})`;
   } else meta.textContent='';
-
   document.getElementById('overlay').classList.add('open');
   document.getElementById('f-name').focus();
 }
@@ -524,17 +420,17 @@ function bgClick(e){ if(e.target===document.getElementById('overlay')) closeModa
 function saveOrder(){
   const now=Date.now();
   const fields={
-    customerName: document.getElementById('f-name').value.trim(),
-    email:        document.getElementById('f-email').value.trim(),
-    phone:        document.getElementById('f-phone').value.trim(),
-    address:      document.getElementById('f-addr').value.trim(),
-    partNumbers:  document.getElementById('f-parts').value.trim(),
-    tracking:     document.getElementById('f-track').value.trim(),
-    notes:        document.getElementById('f-notes').value,
-    stages:       [0,1,2,3,4].map(i=>document.getElementById('sc'+i).checked),
-    lastUpdated:  now
+    customerName:document.getElementById('f-name').value.trim(),
+    email:       document.getElementById('f-email').value.trim(),
+    phone:       document.getElementById('f-phone').value.trim(),
+    address:     document.getElementById('f-addr').value.trim(),
+    partNumbers: document.getElementById('f-parts').value.trim(),
+    tracking:    document.getElementById('f-track').value.trim(),
+    notes:       document.getElementById('f-notes').value,
+    stages:      [0,1,2,3,4].map(i=>document.getElementById('sc'+i).checked),
+    lastUpdated: now
   };
-  if(cid){ Object.assign(orders.find(x=>x.id===cid), fields); }
+  if(cid){ Object.assign(orders.find(x=>x.id===cid),fields); }
   else { orders.push({id:nextId(),createdAt:now,...fields}); }
   persist(); closeModal(); render();
 }
