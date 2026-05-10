@@ -179,7 +179,7 @@ const T = {
     customerName:'客户姓名', email:'邮箱', phone:'电话', address:'地址',
     partNumbers:'零件编号', trackingNumber:'物流单号',
     save:'保存', delete:'删除', created:'创建', lastUpdated:'最后更新', dAgo:'天前',
-    pinPH:'请输入 PIN 码', pinErr:'PIN 码错误',
+    pinPH:'请输入 PIN 码', pinErr:'PIN 码错误', pinLocked:'尝试次数过多，请15分钟后再试',
     delConfirm: id=>`确认删除 ${id}？`, newOrderTitle:'新订单',
   },
   en: {
@@ -190,7 +190,7 @@ const T = {
     customerName:'Customer Name', email:'Email', phone:'Phone', address:'Address',
     partNumbers:'Part Numbers', trackingNumber:'Tracking Number',
     save:'Save', delete:'Delete', created:'Created', lastUpdated:'Last updated', dAgo:'d ago',
-    pinPH:'Enter PIN', pinErr:'Incorrect PIN',
+    pinPH:'Enter PIN', pinErr:'Incorrect PIN', pinLocked:'Too many attempts. Try again in 15 minutes.',
     delConfirm: id=>`Delete ${id}?`, newOrderTitle:'New Order',
   }
 };
@@ -247,14 +247,17 @@ let cid = null, syncTimer = null;
   pi.focus();
   pi.addEventListener('input', async () => {
     pe.textContent = '';
-    if (pi.value.length >= 4) {
+    if (pi.value.length >= 6) {
       const candidate = pi.value.trim();
-      const ok = await verifyPin(candidate);
-      if (ok) {
+      const res = await verifyPin(candidate);
+      if (res === 'ok') {
         pin = candidate;
         localStorage.setItem('mhc-pin', pin);
         ps.classList.add('hidden');
         startBoard();
+      } else if (res === 'locked') {
+        pe.textContent = t('pinLocked');
+        pi.disabled = true;
       } else {
         pe.textContent = t('pinErr');
         pi.value = '';
@@ -269,8 +272,10 @@ async function verifyPin(p) {
     const r = await fetch(WORKER_URL + '/orders', {
       headers: { 'X-PIN': p }
     });
-    return r.ok;
-  } catch { return false; }
+    if (r.ok)         return 'ok';
+    if (r.status === 429) return 'locked';
+    return 'wrong';
+  } catch { return 'wrong'; }
 }
 
 function startBoard() { render(); initSync(); }
