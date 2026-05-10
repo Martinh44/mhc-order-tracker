@@ -353,8 +353,23 @@ async function loadFromGist() {
     const r = await fetch(GIST_URL+'?t='+Date.now(), { headers:{Authorization:'token '+GIST_TOK,Accept:'application/vnd.github+json'} });
     if (!r.ok) throw 0;
     const data = await r.json();
-    orders = JSON.parse(data.files[GIST_FILE]?.content || '[]');
-    localStorage.setItem('mhc-orders', JSON.stringify(orders));
+
+    // Support both old plain-array format and new {savedAt, orders} format
+    const raw       = JSON.parse(data.files[GIST_FILE]?.content || '{"savedAt":0,"orders":[]}');
+    const gistOrders  = Array.isArray(raw) ? raw : (raw.orders || []);
+    const gistSavedAt = Array.isArray(raw) ? 0   : (raw.savedAt || 0);
+    const localSavedAt = parseInt(localStorage.getItem('mhc-saved-at') || '0', 10);
+
+    if (localSavedAt > gistSavedAt) {
+      // Local is newer (e.g. edited offline, or Gist was wiped) — push local up
+      orders = JSON.parse(localStorage.getItem('mhc-orders') || '[]');
+      saveToGist(localSavedAt);
+    } else {
+      // Gist is source of truth
+      orders = gistOrders;
+      localStorage.setItem('mhc-orders', JSON.stringify(orders));
+      localStorage.setItem('mhc-saved-at', String(gistSavedAt));
+    }
     setStatus('ok','synced'); render();
   } catch(e) {
     setStatus('error','offline');
@@ -362,22 +377,26 @@ async function loadFromGist() {
     render();
   }
 }
-async function saveToGist() {
+async function saveToGist(savedAt) {
+  const ts = savedAt || Date.now();
   setStatus('syncing','syncing');
   try {
+    const content = JSON.stringify({savedAt:ts, orders}, null, 2);
     const r = await fetch(GIST_URL, {
       method:'PATCH',
       headers:{Authorization:'token '+GIST_TOK,'Content-Type':'application/json',Accept:'application/vnd.github+json'},
-      body: JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify(orders,null,2)}}})
+      body: JSON.stringify({files:{[GIST_FILE]:{content}}})
     });
     if (!r.ok) throw 0;
     setStatus('ok','synced');
   } catch(e) { setStatus('error','saveFailed'); }
 }
 function persist() {
+  const now = Date.now();
   localStorage.setItem('mhc-orders', JSON.stringify(orders));
+  localStorage.setItem('mhc-saved-at', String(now));
   clearTimeout(syncTimer);
-  syncTimer = setTimeout(saveToGist, 800);
+  syncTimer = setTimeout(() => saveToGist(now), 800);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
