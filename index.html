@@ -258,15 +258,24 @@ async function loadFromGist() {
     const data = await r.json();
 
     // Support both legacy plain-array and current {savedAt, orders} formats
-    const raw         = JSON.parse(data.files[GIST_FILE]?.content || '{"savedAt":0,"orders":[]}');
-    const gistOrders  = Array.isArray(raw) ? raw : (raw.orders || []);
-    const gistSavedAt = Array.isArray(raw) ? 0   : (raw.savedAt || 0);
-    const localSavedAt= parseInt(localStorage.getItem('mhc-saved-at') || '0', 10);
+    const raw          = JSON.parse(data.files[GIST_FILE]?.content || '{"savedAt":0,"orders":[]}');
+    const gistOrders   = Array.isArray(raw) ? raw : (raw.orders || []);
+    const gistSavedAt  = Array.isArray(raw) ? 0   : (raw.savedAt || 0);
+    const localSavedAt = parseInt(localStorage.getItem('mhc-saved-at') || '0', 10);
+    const localOrders  = JSON.parse(localStorage.getItem('mhc-orders') || '[]');
 
-    if (localSavedAt > gistSavedAt) {
-      // Local is newer — push it up (handles offline edits & accidental Gist resets)
-      orders = JSON.parse(localStorage.getItem('mhc-orders') || '[]');
-      saveToGist(localSavedAt);
+    // Conflict resolution:
+    // 1. If only one side has data, use it.
+    // 2. If Gist is empty but not newer than local, local wins (covers accidental resets & pre-timestamp saves).
+    // 3. Otherwise, newest timestamp wins (Gist wins ties so it stays authoritative).
+    const gistEmpty  = gistOrders.length === 0;
+    const localEmpty = localOrders.length === 0;
+    const useLocal   = (!gistEmpty && !localEmpty && localSavedAt > gistSavedAt)  // local newer
+                    || (gistEmpty  && !localEmpty && gistSavedAt <= localSavedAt); // Gist wiped, local has data
+
+    if (useLocal) {
+      orders = localOrders;
+      saveToGist(localSavedAt || Date.now()); // push local up & stamp it
     } else {
       orders = gistOrders;
       localStorage.setItem('mhc-orders', JSON.stringify(orders));
