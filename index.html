@@ -179,7 +179,7 @@ const T = {
     customerName:'客户姓名', email:'邮箱', phone:'电话', address:'地址',
     partNumbers:'零件编号', trackingNumber:'物流单号',
     save:'保存', delete:'删除', created:'创建', lastUpdated:'最后更新', dAgo:'天前',
-    pinPH:'请输入 PIN 码', pinErr:'PIN 码错误', pinLocked:'尝试次数过多，请15分钟后再试',
+    pinPH:'请输入 PIN 码', pinErr:'PIN 码错误', pinLocked:'尝试次数过多，请15分钟后再试', pinBlocked:'此设备已被永久封锁，请联系管理员',
     delConfirm: id=>`确认删除 ${id}？`, newOrderTitle:'新订单',
   },
   en: {
@@ -190,7 +190,7 @@ const T = {
     customerName:'Customer Name', email:'Email', phone:'Phone', address:'Address',
     partNumbers:'Part Numbers', trackingNumber:'Tracking Number',
     save:'Save', delete:'Delete', created:'Created', lastUpdated:'Last updated', dAgo:'d ago',
-    pinPH:'Enter PIN', pinErr:'Incorrect PIN', pinLocked:'Too many attempts. Try again in 15 minutes.',
+    pinPH:'Enter PIN', pinErr:'Incorrect PIN', pinLocked:'Too many attempts. Try again in 15 minutes.', pinBlocked:'This device has been permanently blocked. Contact the administrator.',
     delConfirm: id=>`Delete ${id}?`, newOrderTitle:'New Order',
   }
 };
@@ -258,6 +258,9 @@ let cid = null, syncTimer = null;
       } else if (res === 'locked') {
         pe.textContent = t('pinLocked');
         pi.disabled = true;
+      } else if (res === 'blocked') {
+        pe.textContent = t('pinBlocked');
+        pi.disabled = true;
       } else {
         pe.textContent = t('pinErr');
         pi.value = '';
@@ -272,8 +275,11 @@ async function verifyPin(p) {
     const r = await fetch(WORKER_URL + '/orders', {
       headers: { 'X-PIN': p }
     });
-    if (r.ok)         return 'ok';
-    if (r.status === 429) return 'locked';
+    if (r.ok) return 'ok';
+    if (r.status === 429) {
+      const body = await r.json().catch(() => ({}));
+      return body.error === 'blocked' ? 'blocked' : 'locked';
+    }
     return 'wrong';
   } catch { return 'wrong'; }
 }
