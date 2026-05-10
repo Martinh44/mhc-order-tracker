@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -9,14 +9,14 @@
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#f4f4f4;color:#1a1a1a;min-height:100vh}
 
 /* Full-screen overlay screens */
-.screen{position:fixed;inset:0;background:#fff;z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px}
+.screen{position:fixed;inset:0;background:#fff;z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;text-align:center}
 .screen.hidden{display:none}
-.screen-logo{font-size:22px;font-weight:800;color:#D85A30;letter-spacing:1.5px;text-align:center}
+.screen-logo{font-size:22px;font-weight:800;color:#D85A30;letter-spacing:1.5px}
 .screen-logo small{display:block;font-size:12px;font-weight:400;color:#999;letter-spacing:0;margin-top:2px}
-.screen-sub{font-size:13px;color:#999;text-align:center;max-width:280px;line-height:1.5}
+.screen-sub{font-size:13px;color:#999;max-width:300px;line-height:1.6}
 .pin-input{width:160px;text-align:center;letter-spacing:8px;font-size:22px;font-weight:700;border:none;border-bottom:2px solid #D85A30;padding:8px 4px;background:transparent;color:#1a1a1a;outline:none}
 .pin-input::placeholder{letter-spacing:0;font-size:14px;font-weight:400;color:#ccc}
-.screen-error{font-size:12px;color:#c62828;height:16px;text-align:center}
+.screen-err{font-size:12px;color:#c62828;min-height:16px}
 .setup-input{width:100%;max-width:340px;border:1px solid #ddd;border-radius:3px;padding:9px 10px;font-size:13px;font-family:monospace;color:#1a1a1a;outline:none}
 .setup-input:focus{border-color:#D85A30}
 .btn-primary{background:#D85A30;color:#fff;border:none;padding:9px 24px;font-size:14px;font-weight:700;cursor:pointer;border-radius:3px;width:100%;max-width:340px}
@@ -26,11 +26,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Ar
 header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
 .logo{font-size:15px;font-weight:800;color:#D85A30;letter-spacing:1px}
 .logo small{display:block;font-size:10px;font-weight:400;color:#999;letter-spacing:0;line-height:1.3}
-.header-right{display:flex;align-items:center;gap:10px}
+.header-right{display:flex;align-items:center;gap:8px}
 #sync-status{font-size:11px;color:#bbb}
 #sync-status.syncing{color:#D85A30}
-#sync-status.error{color:#c62828}
 #sync-status.ok{color:#2e7d32}
+#sync-status.error{color:#c62828}
+.btn-lang{background:none;border:1px solid #ddd;color:#888;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer;border-radius:3px;letter-spacing:.3px}
+.btn-lang:hover{border-color:#D85A30;color:#D85A30}
 .btn-new{background:#D85A30;color:#fff;border:none;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;border-radius:3px;white-space:nowrap}
 .btn-new:hover{background:#c04e27}
 
@@ -38,8 +40,8 @@ header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display
 .board{display:flex;gap:10px;padding:14px;overflow-x:auto;align-items:flex-start;min-height:calc(100vh - 54px)}
 
 /* Column */
-.col{flex:0 0 210px;background:#fff;border-radius:5px;border:1px solid #e0e0e0}
-.col-hd{padding:9px 12px;border-bottom:1px solid #ebebeb;display:flex;align-items:center;justify-content:space-between;gap:6px;cursor:default}
+.col{flex:0 0 215px;background:#fff;border-radius:5px;border:1px solid #e0e0e0}
+.col-hd{padding:9px 12px;border-bottom:1px solid #ebebeb;display:flex;align-items:center;gap:6px;cursor:default}
 .col-hd h2{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#666;flex:1}
 .col-ct{background:#D85A30;color:#fff;border-radius:8px;padding:1px 6px;font-size:10px;font-weight:700;flex-shrink:0}
 .col-arrow{font-size:10px;color:#bbb;display:none}
@@ -51,42 +53,52 @@ header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display
 .card:last-child{margin-bottom:0}
 .card:hover{border-color:#D85A30}
 .card.dragging{opacity:.25}
-.c-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px}
+.c-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
 .c-id{font-size:12px;font-weight:800;color:#D85A30}
 .badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:8px}
 .g{background:#e8f5e9;color:#2e7d32}
 .am{background:#fff3e0;color:#e65100}
 .rd{background:#ffebee;color:#c62828}
+.c-date{font-size:10px;color:#ccc;margin-bottom:3px}
 .c-stage{font-size:11px;color:#aaa;margin-bottom:2px}
-.c-track{font-size:11px;color:#666;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.c-notes{font-size:11px;color:#bbb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-customer{font-size:12px;color:#444;font-weight:600;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-parts{font-size:11px;color:#888;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-track{font-size:11px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-/* Order modal */
+/* Modal */
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center;padding:12px}
 .overlay.open{display:flex}
-.modal{background:#fff;border-radius:7px;width:100%;max-width:450px;max-height:92vh;overflow-y:auto;padding:22px}
-.m-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.modal{background:#fff;border-radius:7px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;padding:22px}
+.m-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
 .m-hd h2{font-size:17px;font-weight:800;color:#D85A30}
 .m-x{background:none;border:none;font-size:24px;line-height:1;cursor:pointer;color:#ccc;padding:0}
 .m-x:hover{color:#333}
-.fl{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#999;margin:14px 0 4px}
+
+/* Form section dividers */
+.m-section{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#D85A30;margin:18px 0 10px;padding-bottom:5px;border-bottom:1px solid #f0f0f0}
+.m-section:first-of-type{margin-top:4px}
+.m-row{display:grid;gap:10px;margin-bottom:10px}
+.m-row.two{grid-template-columns:1fr 1fr}
+.fl{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#999;margin-bottom:4px}
 .fi,.fta{width:100%;border:1px solid #ddd;border-radius:3px;padding:7px 9px;font-size:14px;font-family:inherit;color:#1a1a1a;background:#fff}
 .fi:focus,.fta:focus{outline:none;border-color:#D85A30}
-.fta{resize:vertical;min-height:70px}
-.s-row{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #f0f0f0}
+.fta{resize:vertical;min-height:60px}
+
+/* Stage rows */
+.s-row{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid #f5f5f5}
 .s-row:last-child{border:none}
 .s-row input[type=checkbox]{width:15px;height:15px;accent-color:#D85A30;cursor:pointer;flex-shrink:0}
 .s-row input:disabled{opacity:.35;cursor:default}
 .s-lbl{font-size:13px;color:#222;cursor:pointer;margin:0}
 .s-lbl.done{color:#ccc;text-decoration:line-through}
-.m-meta{font-size:11px;color:#ccc;margin-top:14px}
-.m-acts{display:flex;gap:8px;margin-top:18px;justify-content:flex-end}
+
+.m-meta{font-size:11px;color:#ccc;margin-top:12px}
+.m-acts{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
 .btn-del{background:none;border:1px solid #ddd;color:#bbb;padding:7px 14px;font-size:13px;cursor:pointer;border-radius:3px}
 .btn-del:hover{border-color:#c62828;color:#c62828}
 .btn-save{background:#D85A30;color:#fff;border:none;padding:7px 18px;font-size:13px;font-weight:700;cursor:pointer;border-radius:3px}
 .btn-save:hover{background:#c04e27}
 
-/* Mobile */
 @media(max-width:600px){
   .board{flex-direction:column;overflow-x:visible;padding:10px;gap:8px}
   .col{flex:none;width:100%}
@@ -94,6 +106,7 @@ header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display
   .col-hd{cursor:pointer}
   .col.open .col-arrow{transform:rotate(90deg)}
   .col-bd:not(.open){display:none}
+  .m-row.two{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -101,25 +114,26 @@ header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display
 
 <!-- PIN screen -->
 <div class="screen" id="pin-screen">
-  <div class="screen-logo">MH CUSTOMS<small>Order Tracker</small></div>
-  <input class="pin-input" id="pin-input" type="password" inputmode="numeric" maxlength="6" placeholder="Enter PIN" autocomplete="off">
-  <div class="screen-error" id="pin-error"></div>
+  <div class="screen-logo">MH CUSTOMS<small data-i18n="appSub"></small></div>
+  <input class="pin-input" id="pin-input" type="password" inputmode="numeric" maxlength="6" autocomplete="off">
+  <div class="screen-err" id="pin-err"></div>
 </div>
 
-<!-- First-time setup screen (enter sync token) -->
+<!-- Setup screen -->
 <div class="screen hidden" id="setup-screen">
-  <div class="screen-logo">MH CUSTOMS<small>Order Tracker</small></div>
-  <div class="screen-sub">One-time setup: paste the sync token below to enable shared order data across devices.</div>
-  <input class="setup-input" id="setup-token" type="text" placeholder="ghp_…" autocomplete="off" spellcheck="false">
-  <div class="screen-error" id="setup-error"></div>
-  <button class="btn-primary" onclick="doSetup()">Connect &amp; Start</button>
+  <div class="screen-logo">MH CUSTOMS<small data-i18n="appSub"></small></div>
+  <div class="screen-sub" data-i18n="setupSub"></div>
+  <input class="setup-input" id="setup-tok" type="text" autocomplete="off" spellcheck="false">
+  <div class="screen-err" id="setup-err"></div>
+  <button class="btn-primary" id="setup-btn" onclick="doSetup()"></button>
 </div>
 
 <header>
-  <div class="logo">MH CUSTOMS<small>Order Tracker</small></div>
+  <div class="logo">MH CUSTOMS<small data-i18n="appSub"></small></div>
   <div class="header-right">
     <span id="sync-status"></span>
-    <button class="btn-new" onclick="openNew()">+ New Order</button>
+    <button class="btn-lang" id="lang-btn" onclick="toggleLang()"></button>
+    <button class="btn-new" id="btn-new" onclick="openNew()"></button>
   </div>
 </header>
 
@@ -128,233 +142,357 @@ header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display
 <div class="overlay" id="overlay" onclick="bgClick(event)">
   <div class="modal" role="dialog" aria-modal="true">
     <div class="m-hd">
-      <h2 id="m-title">New Order</h2>
+      <h2 id="m-title"></h2>
       <button class="m-x" onclick="closeModal()" aria-label="Close">×</button>
     </div>
-    <span class="fl">Tracking Number</span>
-    <input class="fi" id="f-track" type="text" placeholder="e.g. SF1234567890">
-    <span class="fl" style="margin-top:14px">Progress</span>
+
+    <div class="m-section" data-i18n="secCustomer"></div>
+    <div class="m-row">
+      <div><span class="fl" data-i18n="customerName"></span><input class="fi" id="f-name" type="text"></div>
+    </div>
+    <div class="m-row two">
+      <div><span class="fl" data-i18n="email"></span><input class="fi" id="f-email" type="email"></div>
+      <div><span class="fl" data-i18n="phone"></span><input class="fi" id="f-phone" type="tel"></div>
+    </div>
+    <div class="m-row">
+      <div><span class="fl" data-i18n="address"></span><textarea class="fta" id="f-addr" rows="2"></textarea></div>
+    </div>
+
+    <div class="m-section" data-i18n="secOrder"></div>
+    <div class="m-row">
+      <div><span class="fl" data-i18n="partNumbers"></span><textarea class="fta" id="f-parts" rows="2"></textarea></div>
+    </div>
+    <div class="m-row">
+      <div><span class="fl" data-i18n="trackingNumber"></span><input class="fi" id="f-track" type="text"></div>
+    </div>
+
+    <div class="m-section" data-i18n="secProgress"></div>
     <div id="stages-list"></div>
-    <span class="fl">Notes</span>
-    <textarea class="fta" id="f-notes" placeholder="Any notes…"></textarea>
+
+    <div class="m-section" data-i18n="secNotes"></div>
+    <textarea class="fta" id="f-notes" rows="3"></textarea>
+
     <div class="m-meta" id="m-meta"></div>
     <div class="m-acts">
-      <button class="btn-del" id="btn-del" onclick="delOrder()">Delete</button>
-      <button class="btn-save" onclick="saveOrder()">Save</button>
+      <button class="btn-del" id="btn-del" onclick="delOrder()" data-i18n="delete"></button>
+      <button class="btn-save" onclick="saveOrder()" data-i18n="save"></button>
     </div>
   </div>
 </div>
 
 <script>
-// ── Config (no secrets here) ─────────────────────────────────────────
+// ── Config ───────────────────────────────────────────────────────────
 const PIN       = '8842';
 const GIST_ID   = 'd1dedff261550fdc42f5d900556e87cd';
 const GIST_FILE = 'orders.json';
 const GIST_URL  = `https://api.github.com/gists/${GIST_ID}`;
 
+// ── Translations ─────────────────────────────────────────────────────
+const T = {
+  zh: {
+    appSub:        '订单追踪',
+    langToggle:    'EN',
+    newOrder:      '+ 新订单',
+    syncing:       '↻ 同步中…',
+    synced:        '✓ 已同步',
+    offline:       '⚠ 离线',
+    saveFailed:    '⚠ 保存失败',
+    stages:        ['下单','已付款','生产中','已发货','已签收'],
+    secCustomer:   '客户信息',
+    secOrder:      '订单信息',
+    secProgress:   '进度',
+    secNotes:      '备注',
+    customerName:  '客户姓名',
+    email:         '邮箱',
+    phone:         '电话',
+    address:       '地址',
+    partNumbers:   '零件编号',
+    trackingNumber:'物流单号',
+    save:          '保存',
+    delete:        '删除',
+    created:       '创建',
+    lastUpdated:   '最后更新',
+    dAgo:          '天前',
+    setupSub:      '首次设置：请粘贴同步令牌以启用多设备共享数据。',
+    setupBtn:      '连接并开始',
+    setupPH:       '粘贴令牌 (ghp_…)',
+    checking:      '检查中…',
+    errFmt:        '令牌格式不正确（应以 ghp_ 开头）',
+    errAuth:       '令牌无效，请检查是否完整复制。',
+    errGist:       '令牌有效但无法访问数据，请确认已开启 gist 权限。',
+    errNet:        '网络错误，请检查连接。',
+    pinPH:         '请输入 PIN 码',
+    pinErr:        'PIN 码错误',
+    delConfirm:    id => `确认删除 ${id}？`,
+    newOrderTitle: '新订单',
+  },
+  en: {
+    appSub:        'Order Tracker',
+    langToggle:    '中文',
+    newOrder:      '+ New Order',
+    syncing:       '↻ syncing…',
+    synced:        '✓ synced',
+    offline:       '⚠ offline',
+    saveFailed:    '⚠ save failed',
+    stages:        ['Order Raised','Invoice Paid','In Production','Shipped','Delivered'],
+    secCustomer:   'Customer',
+    secOrder:      'Order Details',
+    secProgress:   'Progress',
+    secNotes:      'Notes',
+    customerName:  'Customer Name',
+    email:         'Email',
+    phone:         'Phone',
+    address:       'Address',
+    partNumbers:   'Part Numbers',
+    trackingNumber:'Tracking Number',
+    save:          'Save',
+    delete:        'Delete',
+    created:       'Created',
+    lastUpdated:   'Last updated',
+    dAgo:          'd ago',
+    setupSub:      'One-time setup: paste the sync token to enable shared data across devices.',
+    setupBtn:      'Connect & Start',
+    setupPH:       'Paste token (ghp_…)',
+    checking:      'Checking…',
+    errFmt:        "Doesn't look like a GitHub token (should start with ghp_)",
+    errAuth:       'Token rejected — check you copied it fully.',
+    errGist:       "Token valid but can't access the gist — ensure it has 'gist' scope.",
+    errNet:        'Network error — check your connection.',
+    pinPH:         'Enter PIN',
+    pinErr:        'Incorrect PIN',
+    delConfirm:    id => `Delete ${id}?`,
+    newOrderTitle: 'New Order',
+  }
+};
+
+// ── Language ─────────────────────────────────────────────────────────
+let lang = localStorage.getItem('mhc-lang') || 'zh';
+function t(k) { return T[lang][k]; }
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  // data-i18n text nodes
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const k = el.dataset.i18n;
+    if (T[lang][k] !== undefined) el.textContent = T[lang][k];
+  });
+  // placeholders
+  const pi = document.getElementById('pin-input');
+  if (pi) pi.placeholder = t('pinPH');
+  const st = document.getElementById('setup-tok');
+  if (st) st.placeholder = t('setupPH');
+  document.getElementById('setup-btn').textContent = t('setupBtn');
+  document.getElementById('lang-btn').textContent  = t('langToggle');
+  document.getElementById('btn-new').textContent   = t('newOrder');
+}
+
+function toggleLang() {
+  lang = lang === 'zh' ? 'en' : 'zh';
+  localStorage.setItem('mhc-lang', lang);
+  applyLang();
+  render();
+  // re-render modal if open
+  if (document.getElementById('overlay').classList.contains('open')) openModal(cid);
+}
+
 // ── PIN ──────────────────────────────────────────────────────────────
 (function initPin() {
-  const ps  = document.getElementById('pin-screen');
-  const pi  = document.getElementById('pin-input');
-  const pe  = document.getElementById('pin-error');
+  applyLang();
+  const ps = document.getElementById('pin-screen');
+  const pi = document.getElementById('pin-input');
+  const pe = document.getElementById('pin-err');
   if (sessionStorage.getItem('mhc-auth') === '1') { ps.classList.add('hidden'); initApp(); return; }
   pi.focus();
   pi.addEventListener('input', () => {
     pe.textContent = '';
     if (pi.value.length >= PIN.length) {
-      if (pi.value === PIN) {
-        sessionStorage.setItem('mhc-auth', '1');
-        ps.classList.add('hidden');
-        initApp();
-      } else {
-        pe.textContent = 'Incorrect PIN';
-        pi.value = '';
-        pi.focus();
-      }
+      if (pi.value === PIN) { sessionStorage.setItem('mhc-auth','1'); ps.classList.add('hidden'); initApp(); }
+      else { pe.textContent = t('pinErr'); pi.value = ''; pi.focus(); }
     }
   });
 })();
 
-// ── Setup (first-time token entry) ───────────────────────────────────
+// ── Setup ─────────────────────────────────────────────────────────────
 function initApp() {
   const tok = localStorage.getItem('mhc-tok');
-  if (!tok) {
-    document.getElementById('setup-screen').classList.remove('hidden');
-    document.getElementById('setup-token').focus();
-  } else {
-    startBoard(tok);
-  }
+  if (!tok) { document.getElementById('setup-screen').classList.remove('hidden'); document.getElementById('setup-tok').focus(); }
+  else startBoard(tok);
 }
 
 async function doSetup() {
-  const tok = document.getElementById('setup-token').value.trim();
-  const err = document.getElementById('setup-error');
+  const tok = document.getElementById('setup-tok').value.trim();
+  const err = document.getElementById('setup-err');
   err.textContent = '';
-  if (!tok.startsWith('ghp_') && !tok.startsWith('github_pat_')) {
-    err.textContent = 'That doesn\'t look like a GitHub token (should start with ghp_)';
-    return;
-  }
-  // Verify token works against the gist
-  err.textContent = 'Checking…';
+  if (!tok.startsWith('ghp_') && !tok.startsWith('github_pat_')) { err.textContent = t('errFmt'); return; }
+  err.textContent = t('checking');
   try {
     const r = await fetch(GIST_URL, { headers: { Authorization: 'token ' + tok } });
-    if (r.status === 401) { err.textContent = 'Token rejected — check you copied it fully.'; return; }
-    if (r.status === 404) { err.textContent = 'Token valid but can\'t access the gist — make sure it has "gist" scope.'; return; }
-    if (!r.ok) { err.textContent = `Error ${r.status} — try again.`; return; }
+    if (r.status === 401) { err.textContent = t('errAuth'); return; }
+    if (r.status === 404) { err.textContent = t('errGist'); return; }
+    if (!r.ok) { err.textContent = `Error ${r.status}`; return; }
     localStorage.setItem('mhc-tok', tok);
     document.getElementById('setup-screen').classList.add('hidden');
     startBoard(tok);
-  } catch(e) {
-    err.textContent = 'Network error — check your connection.';
-  }
+  } catch(e) { err.textContent = t('errNet'); }
 }
 
-// ── Board ─────────────────────────────────────────────────────────────
-const SN = ['Order Raised','Invoice Paid','In Production','Shipped','Delivered'];
+// ── State ─────────────────────────────────────────────────────────────
 let orders = JSON.parse(localStorage.getItem('mhc-orders') || '[]');
-let cid = null;
-let syncTimer = null;
-let GIST_TOK = '';
+let cid = null, syncTimer = null, GIST_TOK = '';
 
-function startBoard(tok) {
-  GIST_TOK = tok;
-  render();
-  loadFromGist();
-}
+function startBoard(tok) { GIST_TOK = tok; render(); loadFromGist(); }
 
-// ── Sync ─────────────────────────────────────────────────────────────
-function setStatus(state, msg) {
+// ── Sync ──────────────────────────────────────────────────────────────
+function setStatus(state, key) {
   const el = document.getElementById('sync-status');
-  el.className = state; el.textContent = msg;
+  el.className = state; el.textContent = t(key);
 }
-
 async function loadFromGist() {
-  setStatus('syncing', '↻ syncing…');
+  setStatus('syncing','syncing');
   try {
-    const r = await fetch(GIST_URL + '?t=' + Date.now(), {
-      headers: { Authorization: 'token ' + GIST_TOK, Accept: 'application/vnd.github+json' }
-    });
-    if (!r.ok) throw new Error(r.status);
+    const r = await fetch(GIST_URL+'?t='+Date.now(), { headers:{Authorization:'token '+GIST_TOK,Accept:'application/vnd.github+json'} });
+    if (!r.ok) throw 0;
     const data = await r.json();
-    const raw = data.files[GIST_FILE]?.content || '[]';
-    orders = JSON.parse(raw);
+    orders = JSON.parse(data.files[GIST_FILE]?.content || '[]');
     localStorage.setItem('mhc-orders', JSON.stringify(orders));
-    setStatus('ok', '✓ synced');
-    render();
+    setStatus('ok','synced'); render();
   } catch(e) {
-    setStatus('error', '⚠ offline');
+    setStatus('error','offline');
     orders = JSON.parse(localStorage.getItem('mhc-orders') || '[]');
     render();
   }
 }
-
 async function saveToGist() {
-  setStatus('syncing', '↻ saving…');
+  setStatus('syncing','syncing');
   try {
     const r = await fetch(GIST_URL, {
-      method: 'PATCH',
-      headers: { Authorization: 'token ' + GIST_TOK, 'Content-Type': 'application/json', Accept: 'application/vnd.github+json' },
-      body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(orders, null, 2) } } })
+      method:'PATCH',
+      headers:{Authorization:'token '+GIST_TOK,'Content-Type':'application/json',Accept:'application/vnd.github+json'},
+      body: JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify(orders,null,2)}}})
     });
-    if (!r.ok) throw new Error(r.status);
-    setStatus('ok', '✓ saved');
-  } catch(e) {
-    setStatus('error', '⚠ save failed');
-  }
+    if (!r.ok) throw 0;
+    setStatus('ok','synced');
+  } catch(e) { setStatus('error','saveFailed'); }
 }
-
 function persist() {
   localStorage.setItem('mhc-orders', JSON.stringify(orders));
   clearTimeout(syncTimer);
   syncTimer = setTimeout(saveToGist, 800);
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────
 function nextId() {
   if (!orders.length) return 'MHC-001';
-  const max = Math.max(...orders.map(o => parseInt(o.id.slice(4), 10)));
-  return 'MHC-' + String(max + 1).padStart(3, '0');
+  return 'MHC-' + String(Math.max(...orders.map(o=>parseInt(o.id.slice(4),10)))+1).padStart(3,'0');
 }
-function colOf(o) { let s = 0; for (let i = 0; i < 5; i++) if (o.stages[i]) s = i; return s; }
-function daysAgo(ts) { return Math.floor((Date.now() - ts) / 86400000); }
-function bCls(d)     { return d < 7 ? 'g' : d < 14 ? 'am' : 'rd'; }
-function esc(s)      { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function colOf(o) { let s=0; for(let i=0;i<5;i++) if(o.stages[i]) s=i; return s; }
+function daysAgo(ts) { return Math.floor((Date.now()-ts)/86400000); }
+function bCls(d) { return d<7?'g':d<14?'am':'rd'; }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmtDate(ts) {
+  const d = new Date(ts);
+  if (lang==='zh') return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+}
 
-// ── Render ───────────────────────────────────────────────────────────
+// ── Render ────────────────────────────────────────────────────────────
 function render() {
   const board = document.getElementById('board');
   board.innerHTML = '';
-  for (let s = 0; s < 5; s++) {
-    const colOrders = orders.filter(o => colOf(o) === s);
-    const col = document.createElement('div'); col.className = 'col';
-    const hd  = document.createElement('div'); hd.className = 'col-hd';
-    hd.innerHTML = `<h2>${SN[s]}</h2><span class="col-ct">${colOrders.length}</span><span class="col-arrow">▶</span>`;
-    hd.addEventListener('click', () => toggleCol(col, bd));
-    const bd = document.createElement('div'); bd.className = 'col-bd'; bd.dataset.stage = s;
-    bd.addEventListener('dragover', e => { e.preventDefault(); bd.classList.add('over'); });
-    bd.addEventListener('dragleave', e => { if (!bd.contains(e.relatedTarget)) bd.classList.remove('over'); });
-    bd.addEventListener('drop', e => {
-      e.preventDefault(); bd.classList.remove('over');
-      const o = orders.find(x => x.id === e.dataTransfer.getData('text')); if (!o) return;
-      for (let i = 0; i <= s; i++) o.stages[i] = true;
-      for (let i = s+1; i < 5; i++) o.stages[i] = false;
-      o.lastUpdated = Date.now(); persist(); render();
+  const stages = t('stages');
+  for (let s=0;s<5;s++) {
+    const colOrders = orders.filter(o=>colOf(o)===s);
+    const col = document.createElement('div'); col.className='col';
+    const hd  = document.createElement('div'); hd.className='col-hd';
+    hd.innerHTML=`<h2>${stages[s]}</h2><span class="col-ct">${colOrders.length}</span><span class="col-arrow">▶</span>`;
+    hd.addEventListener('click',()=>toggleCol(col,bd));
+    const bd = document.createElement('div'); bd.className='col-bd'; bd.dataset.stage=s;
+    bd.addEventListener('dragover',e=>{e.preventDefault();bd.classList.add('over');});
+    bd.addEventListener('dragleave',e=>{if(!bd.contains(e.relatedTarget))bd.classList.remove('over');});
+    bd.addEventListener('drop',e=>{
+      e.preventDefault();bd.classList.remove('over');
+      const o=orders.find(x=>x.id===e.dataTransfer.getData('text')); if(!o) return;
+      for(let i=0;i<=s;i++) o.stages[i]=true;
+      for(let i=s+1;i<5;i++) o.stages[i]=false;
+      o.lastUpdated=Date.now(); persist(); render();
     });
-    colOrders.forEach(o => {
-      const d = daysAgo(o.lastUpdated);
-      const card = document.createElement('div');
-      card.className = 'card'; card.draggable = true; card.dataset.id = o.id;
-      const fn = (o.notes||'').split('\n')[0].trim();
-      card.innerHTML =
-        `<div class="c-top"><span class="c-id">${o.id}</span><span class="badge ${bCls(d)}">${d}d</span></div>`+
-        `<div class="c-stage">${SN[colOf(o)]}</div>`+
-        (o.tracking ? `<div class="c-track">${esc(o.tracking)}</div>` : '')+
-        (fn ? `<div class="c-notes">${esc(fn)}</div>` : '');
-      card.addEventListener('dragstart', e => { e.dataTransfer.setData('text', o.id); requestAnimationFrame(() => card.classList.add('dragging')); });
-      card.addEventListener('dragend', () => card.classList.remove('dragging'));
-      card.addEventListener('click', () => openModal(o.id));
+    colOrders.forEach(o=>{
+      const d=daysAgo(o.lastUpdated);
+      const card=document.createElement('div');
+      card.className='card'; card.draggable=true; card.dataset.id=o.id;
+      card.innerHTML=
+        `<div class="c-top"><span class="c-id">${o.id}</span><span class="badge ${bCls(d)}">${d}${lang==='zh'?'天':'d'}</span></div>`+
+        `<div class="c-date">${fmtDate(o.createdAt||o.lastUpdated)}</div>`+
+        `<div class="c-stage">${stages[colOf(o)]}</div>`+
+        (o.customerName?`<div class="c-customer">${esc(o.customerName)}</div>`:'')+
+        (o.partNumbers?`<div class="c-parts">${esc(o.partNumbers.split('\n')[0])}</div>`:'')+
+        (o.tracking?`<div class="c-track">${esc(o.tracking)}</div>`:'');
+      card.addEventListener('dragstart',e=>{e.dataTransfer.setData('text',o.id);requestAnimationFrame(()=>card.classList.add('dragging'));});
+      card.addEventListener('dragend',()=>card.classList.remove('dragging'));
+      card.addEventListener('click',()=>openModal(o.id));
       bd.appendChild(card);
     });
     col.appendChild(hd); col.appendChild(bd); board.appendChild(col);
   }
 }
 
-function toggleCol(col, bd) {
-  if (getComputedStyle(col.querySelector('.col-arrow')).display === 'none') return;
-  const open = col.classList.toggle('open'); bd.classList.toggle('open', open);
+function toggleCol(col,bd){
+  if(getComputedStyle(col.querySelector('.col-arrow')).display==='none') return;
+  const open=col.classList.toggle('open'); bd.classList.toggle('open',open);
 }
 
-// ── Modal ────────────────────────────────────────────────────────────
+// ── Modal ─────────────────────────────────────────────────────────────
 function openNew() { openModal(null); }
 function openModal(id) {
-  cid = id;
-  const o = id ? orders.find(x => x.id === id) : null;
-  document.getElementById('m-title').textContent = id || 'New Order';
-  document.getElementById('f-track').value = o ? (o.tracking||'') : '';
-  document.getElementById('f-notes').value = o ? (o.notes||'') : '';
-  document.getElementById('btn-del').style.display = id ? '' : 'none';
-  const sv = o ? o.stages : [false,false,false,false,false];
-  const list = document.getElementById('stages-list'); list.innerHTML = '';
-  for (let i = 0; i < 5; i++) {
-    const row = document.createElement('div'); row.className = 's-row';
-    const cb  = document.createElement('input'); cb.type='checkbox'; cb.id='sc'+i;
-    cb.checked = sv[i]; cb.disabled = sv.slice(i+1).some(Boolean);
-    cb.addEventListener('change', onStage);
-    const lbl = document.createElement('label'); lbl.htmlFor='sc'+i;
-    lbl.className = 's-lbl'+(sv[i]?' done':''); lbl.textContent = SN[i];
-    row.append(cb, lbl); list.appendChild(row);
+  cid=id;
+  const o=id?orders.find(x=>x.id===id):null;
+  const stages=t('stages');
+
+  document.getElementById('m-title').textContent = id||t('newOrderTitle');
+  document.getElementById('f-name').value    = o?.customerName||'';
+  document.getElementById('f-email').value   = o?.email||'';
+  document.getElementById('f-phone').value   = o?.phone||'';
+  document.getElementById('f-addr').value    = o?.address||'';
+  document.getElementById('f-parts').value   = o?.partNumbers||'';
+  document.getElementById('f-track').value   = o?.tracking||'';
+  document.getElementById('f-notes').value   = o?.notes||'';
+  document.getElementById('btn-del').style.display = id?'':'none';
+
+  // re-apply lang to modal labels
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const k=el.dataset.i18n; if(T[lang][k]!==undefined) el.textContent=T[lang][k];
+  });
+  document.querySelector('[data-i18n="save"]').textContent  = t('save');
+  document.querySelector('[data-i18n="delete"]').textContent= t('delete');
+
+  const sv=o?o.stages:[false,false,false,false,false];
+  const list=document.getElementById('stages-list'); list.innerHTML='';
+  for(let i=0;i<5;i++){
+    const row=document.createElement('div'); row.className='s-row';
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.id='sc'+i;
+    cb.checked=sv[i]; cb.disabled=sv.slice(i+1).some(Boolean);
+    cb.addEventListener('change',onStage);
+    const lbl=document.createElement('label'); lbl.htmlFor='sc'+i;
+    lbl.className='s-lbl'+(sv[i]?' done':''); lbl.textContent=stages[i];
+    row.append(cb,lbl); list.appendChild(row);
   }
-  document.getElementById('m-meta').textContent = o
-    ? `Last updated: ${new Date(o.lastUpdated).toLocaleString()}  ·  ${daysAgo(o.lastUpdated)}d ago` : '';
+
+  const meta=document.getElementById('m-meta');
+  if(o){
+    const cr=o.createdAt?`${t('created')}: ${fmtDate(o.createdAt)}  ·  `:'';
+    meta.textContent=`${cr}${t('lastUpdated')}: ${fmtDate(o.lastUpdated)} (${daysAgo(o.lastUpdated)}${lang==='zh'?'天前':'d ago'})`;
+  } else meta.textContent='';
+
   document.getElementById('overlay').classList.add('open');
-  document.getElementById('f-track').focus();
+  document.getElementById('f-name').focus();
 }
-function onStage(e) {
-  const i = +e.target.id.slice(2), on = e.target.checked;
-  for (let j=0;j<5;j++) { const cb=document.getElementById('sc'+j); if(on&&j<=i) cb.checked=true; if(!on&&j>=i) cb.checked=false; }
+
+function onStage(e){
+  const i=+e.target.id.slice(2),on=e.target.checked;
+  for(let j=0;j<5;j++){const cb=document.getElementById('sc'+j);if(on&&j<=i)cb.checked=true;if(!on&&j>=i)cb.checked=false;}
   syncLocks();
 }
-function syncLocks() {
+function syncLocks(){
   const v=[0,1,2,3,4].map(i=>document.getElementById('sc'+i).checked);
   for(let i=0;i<5;i++){
     document.getElementById('sc'+i).disabled=v.slice(i+1).some(Boolean);
@@ -363,17 +501,27 @@ function syncLocks() {
 }
 function closeModal(){ document.getElementById('overlay').classList.remove('open'); cid=null; }
 function bgClick(e){ if(e.target===document.getElementById('overlay')) closeModal(); }
-function saveOrder() {
-  const tracking=document.getElementById('f-track').value.trim();
-  const notes=document.getElementById('f-notes').value;
-  const stages=[0,1,2,3,4].map(i=>document.getElementById('sc'+i).checked);
+
+function saveOrder(){
   const now=Date.now();
-  if(cid){ Object.assign(orders.find(x=>x.id===cid),{tracking,notes,stages,lastUpdated:now}); }
-  else { orders.push({id:nextId(),stages,tracking,notes,lastUpdated:now,createdAt:now}); }
+  const fields={
+    customerName: document.getElementById('f-name').value.trim(),
+    email:        document.getElementById('f-email').value.trim(),
+    phone:        document.getElementById('f-phone').value.trim(),
+    address:      document.getElementById('f-addr').value.trim(),
+    partNumbers:  document.getElementById('f-parts').value.trim(),
+    tracking:     document.getElementById('f-track').value.trim(),
+    notes:        document.getElementById('f-notes').value,
+    stages:       [0,1,2,3,4].map(i=>document.getElementById('sc'+i).checked),
+    lastUpdated:  now
+  };
+  if(cid){ Object.assign(orders.find(x=>x.id===cid), fields); }
+  else { orders.push({id:nextId(),createdAt:now,...fields}); }
   persist(); closeModal(); render();
 }
-function delOrder() {
-  if(!cid||!confirm('Delete '+cid+'?')) return;
+
+function delOrder(){
+  if(!cid||!confirm(t('delConfirm')(cid))) return;
   orders=orders.filter(x=>x.id!==cid); persist(); closeModal(); render();
 }
 </script>
