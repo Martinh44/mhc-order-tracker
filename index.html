@@ -393,11 +393,8 @@ function render() {
       card.className='card'; card.draggable=true; card.dataset.id=o.id;
       card.innerHTML=
         `<div class="c-top"><span class="c-id">${o.id}</span><span class="badge ${bCls(d)}">${d}${lang==='zh'?'天':'d'}</span></div>`+
-        `<div class="c-date">${fmtDate(o.createdAt||o.lastUpdated)}</div>`+
-        `<div class="c-stage">${stages[colOf(o)]}</div>`+
         (o.customerName?`<div class="c-customer">${esc(o.customerName)}</div>`:'')+
-        (o.partNumbers?`<div class="c-parts">${esc(o.partNumbers.split('\n')[0])}</div>`:'')+
-        (o.tracking?`<div class="c-track">${esc(o.tracking)}</div>`:'');
+        (o.partNumbers?`<div class="c-parts">${esc(o.partNumbers.split('\n')[0])}</div>`:'');
       card.addEventListener('dragstart',e=>{e.dataTransfer.setData('text',o.id);requestAnimationFrame(()=>card.classList.add('dragging'));});
       card.addEventListener('dragend',()=>card.classList.remove('dragging'));
       card.addEventListener('click',()=>openModal(o.id));
