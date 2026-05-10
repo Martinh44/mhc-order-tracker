@@ -26,6 +26,8 @@ header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display
 #sync-status.syncing{color:#D85A30}
 #sync-status.ok{color:#2e7d32}
 #sync-status.error{color:#c62828}
+.btn-sync{background:none;border:1px solid #ddd;color:#888;padding:5px 8px;font-size:13px;cursor:pointer;border-radius:3px;line-height:1}
+.btn-sync:hover{border-color:#D85A30;color:#D85A30}
 .btn-lang{background:none;border:1px solid #ddd;color:#888;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer;border-radius:3px}
 .btn-lang:hover{border-color:#D85A30;color:#D85A30}
 .btn-new{background:#D85A30;color:#fff;border:none;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;border-radius:3px;white-space:nowrap}
@@ -113,6 +115,7 @@ header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display
   <div class="logo">MH CUSTOMS<small data-i18n="appSub"></small></div>
   <div class="header-right">
     <span id="sync-status"></span>
+    <button class="btn-sync" id="btn-sync" onclick="pullFromGist()" title="Pull latest from cloud">↻</button>
     <button class="btn-lang" id="lang-btn" onclick="toggleLang()"></button>
     <button class="btn-new" id="btn-new" onclick="openNew()"></button>
   </div>
@@ -246,7 +249,7 @@ if (orders.length > 0 && parseInt(localStorage.getItem('mhc-saved-at') || '0', 1
   localStorage.setItem('mhc-saved-at', String(Date.now()));
 }
 
-function startBoard() { render(); loadFromGist(); }
+function startBoard() { render(); initSync(); }
 
 // ── Sync ──────────────────────────────────────────────────────────────
 function setStatus(state, key) {
@@ -254,50 +257,45 @@ function setStatus(state, key) {
   el.className = state; el.textContent = t(key);
 }
 
-async function loadFromGist() {
-  setStatus('syncing','syncing');
+// On page load: push local data to Gist (never pull — localStorage is sacred).
+// If localStorage is empty (fresh browser), pull from Gist once.
+async function initSync() {
+  const localOrders = JSON.parse(localStorage.getItem('mhc-orders') || '[]');
+  if (localOrders.length === 0) {
+    // Fresh browser — pull from Gist
+    await pullFromGist(true);
+  } else {
+    // Have local data — push it to Gist to keep in sync, never overwrite local
+    const ts = parseInt(localStorage.getItem('mhc-saved-at') || '0', 10) || Date.now();
+    localStorage.setItem('mhc-saved-at', String(ts));
+    pushToGist(ts);
+  }
+}
+
+// Pull from Gist — only called on fresh browser OR when user clicks ↻
+async function pullFromGist(silent) {
+  if (!silent) setStatus('syncing','syncing');
   try {
     const r = await fetch(GIST_URL+'?t='+Date.now(), {
       headers:{Authorization:'token '+GIST_TOK, Accept:'application/vnd.github+json'}
     });
     if (!r.ok) throw 0;
     const data = await r.json();
-
-    // Support both legacy plain-array and current {savedAt, orders} formats
-    const raw          = JSON.parse(data.files[GIST_FILE]?.content || '{"savedAt":0,"orders":[]}');
-    const gistOrders   = Array.isArray(raw) ? raw : (raw.orders || []);
-    const gistSavedAt  = Array.isArray(raw) ? 0   : (raw.savedAt || 0);
-    const localSavedAt = parseInt(localStorage.getItem('mhc-saved-at') || '0', 10);
-    const localOrders  = JSON.parse(localStorage.getItem('mhc-orders') || '[]');
-
-    // Conflict resolution — three simple rules in priority order:
-    // 1. No local data at all → take Gist (fresh browser / cleared storage)
-    // 2. Gist has a strictly higher savedAt AND has orders → Gist is newer, use it
-    // 3. Everything else → local is authoritative, push it up to Gist
-    if (localOrders.length === 0) {
-      orders = gistOrders;
-      localStorage.setItem('mhc-orders', JSON.stringify(orders));
-      localStorage.setItem('mhc-saved-at', String(gistSavedAt || Date.now()));
-    } else if (gistSavedAt > 0 && gistSavedAt > localSavedAt && gistOrders.length > 0) {
-      // Only trust Gist if it has a real timestamp (>0) AND is strictly newer
-      orders = gistOrders;
-      localStorage.setItem('mhc-orders', JSON.stringify(orders));
-      localStorage.setItem('mhc-saved-at', String(gistSavedAt));
-    } else {
-      orders = localOrders;
-      const ts = localSavedAt || Date.now();
-      localStorage.setItem('mhc-saved-at', String(ts));
-      saveToGist(ts);
-    }
-    setStatus('ok','synced'); render();
+    const raw = JSON.parse(data.files[GIST_FILE]?.content || '[]');
+    const gistOrders = Array.isArray(raw) ? raw : (raw.orders || []);
+    const gistSavedAt = Array.isArray(raw) ? 0 : (raw.savedAt || 0);
+    orders = gistOrders;
+    localStorage.setItem('mhc-orders', JSON.stringify(orders));
+    localStorage.setItem('mhc-saved-at', String(gistSavedAt || Date.now()));
+    setStatus('ok','synced');
+    render();
   } catch(e) {
     setStatus('error','offline');
-    orders = JSON.parse(localStorage.getItem('mhc-orders') || '[]');
-    render();
   }
 }
 
-async function saveToGist(savedAt) {
+// Push to Gist — called after every save and on load (to keep Gist current)
+async function pushToGist(savedAt) {
   const ts = savedAt || Date.now();
   setStatus('syncing','syncing');
   try {
@@ -316,7 +314,7 @@ function persist() {
   localStorage.setItem('mhc-orders', JSON.stringify(orders));
   localStorage.setItem('mhc-saved-at', String(now));
   clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => saveToGist(now), 800);
+  syncTimer = setTimeout(() => pushToGist(now), 800);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
