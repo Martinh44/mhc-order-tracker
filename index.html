@@ -357,7 +357,7 @@ function nextId() {
 }
 function colOf(o)    { let s=0; for(let i=0;i<5;i++) if(o.stages[i]) s=i; return s; }
 function daysAgo(ts) { return Math.floor((Date.now()-ts)/86400000); }
-function bCls(d)     { return d<7?'g':d<14?'am':'rd'; }
+function bCls(d, shipped) { return shipped?'g':d<20?'g':d<30?'am':'rd'; }
 function esc(s)      { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function fmtDate(ts) {
   const d=new Date(ts);
@@ -388,11 +388,12 @@ function render() {
       o.lastUpdated=Date.now(); persist(); render();
     });
     colOrders.forEach(o=>{
-      const d=daysAgo(o.lastUpdated);
+      const d=daysAgo(o.createdAt||o.lastUpdated);
+      const shipped=colOf(o)>=3;
       const card=document.createElement('div');
       card.className='card'; card.draggable=true; card.dataset.id=o.id;
       card.innerHTML=
-        `<div class="c-top"><span class="c-id">${o.id}</span><span class="badge ${bCls(d)}">${d}${lang==='zh'?'天':'d'}</span></div>`+
+        `<div class="c-top"><span class="c-id">${o.id}</span><span class="badge ${bCls(d,shipped)}">${d}${lang==='zh'?'天':'d'}</span></div>`+
         (o.customerName?`<div class="c-customer">${esc(o.customerName)}</div>`:'')+
         (o.partNumbers?`<div class="c-parts">${esc(o.partNumbers.split('\n')[0])}</div>`:'');
       card.addEventListener('dragstart',e=>{e.dataTransfer.setData('text',o.id);requestAnimationFrame(()=>card.classList.add('dragging'));});
