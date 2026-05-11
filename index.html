@@ -146,8 +146,9 @@ header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display
     <div class="m-row">
       <div><span class="fl" data-i18n="partNumbers"></span><textarea class="fta" id="f-parts" rows="2"></textarea></div>
     </div>
-    <div class="m-row">
+    <div class="m-row two">
       <div><span class="fl" data-i18n="trackingNumber"></span><input class="fi" id="f-track" type="text"></div>
+      <div><span class="fl" data-i18n="createdDate"></span><input class="fi" id="f-created" type="date"></div>
     </div>
 
     <div class="m-section" data-i18n="secProgress"></div>
@@ -177,7 +178,7 @@ const T = {
     stages:['下单','已付款','生产中','已发货','已签收'],
     secCustomer:'客户信息', secOrder:'订单信息', secProgress:'进度', secNotes:'备注',
     customerName:'客户姓名', email:'邮箱', phone:'电话', address:'地址',
-    partNumbers:'零件编号', trackingNumber:'物流单号',
+    partNumbers:'零件编号', trackingNumber:'物流单号', createdDate:'创建日期',
     save:'保存', delete:'删除', created:'创建', lastUpdated:'最后更新', dAgo:'天前',
     pinPH:'请输入 PIN 码', pinErr:'PIN 码错误', pinLocked:'尝试次数过多，请15分钟后再试', pinBlocked:'此设备已被永久封锁，请联系管理员',
     delConfirm: id=>`确认删除 ${id}？`, newOrderTitle:'新订单',
@@ -188,7 +189,7 @@ const T = {
     stages:['Order Raised','Invoice Paid','In Production','Shipped','Delivered'],
     secCustomer:'Customer', secOrder:'Order Details', secProgress:'Progress', secNotes:'Notes',
     customerName:'Customer Name', email:'Email', phone:'Phone', address:'Address',
-    partNumbers:'Part Numbers', trackingNumber:'Tracking Number',
+    partNumbers:'Part Numbers', trackingNumber:'Tracking Number', createdDate:'Created Date',
     save:'Save', delete:'Delete', created:'Created', lastUpdated:'Last updated', dAgo:'d ago',
     pinPH:'Enter PIN', pinErr:'Incorrect PIN', pinLocked:'Too many attempts. Try again in 15 minutes.', pinBlocked:'This device has been permanently blocked. Contact the administrator.',
     delConfirm: id=>`Delete ${id}?`, newOrderTitle:'New Order',
@@ -356,7 +357,12 @@ function nextId() {
   return 'MHC-'+String(Math.max(...orders.map(o=>parseInt(o.id.slice(4),10)))+1).padStart(3,'0');
 }
 function colOf(o)    { let s=0; for(let i=0;i<5;i++) if(o.stages[i]) s=i; return s; }
-function daysAgo(ts) { return Math.floor((Date.now()-ts)/86400000); }
+function daysAgo(ts) {
+  const a=new Date(ts), b=new Date();
+  const aMid=new Date(a.getFullYear(),a.getMonth(),a.getDate());
+  const bMid=new Date(b.getFullYear(),b.getMonth(),b.getDate());
+  return Math.floor((bMid-aMid)/86400000);
+}
 function bCls(d, shipped) { return shipped?'g':d<20?'g':d<30?'am':'rd'; }
 function esc(s)      { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function fmtDate(ts) {
@@ -424,6 +430,8 @@ function openModal(id){
   document.getElementById('f-parts').value =o?.partNumbers||'';
   document.getElementById('f-track').value =o?.tracking||'';
   document.getElementById('f-notes').value =o?.notes||'';
+  const createdTs=o?.createdAt||o?.lastUpdated||Date.now();
+  document.getElementById('f-created').value=new Date(createdTs).toISOString().slice(0,10);
   document.getElementById('btn-del').style.display=id?'':'none';
   document.querySelectorAll('[data-i18n]').forEach(el=>{
     const v=T[lang][el.dataset.i18n]; if(v!==undefined) el.textContent=v;
@@ -474,10 +482,11 @@ function saveOrder(){
     tracking:    document.getElementById('f-track').value.trim(),
     notes:       document.getElementById('f-notes').value,
     stages:      [0,1,2,3,4].map(i=>document.getElementById('sc'+i).checked),
-    lastUpdated: now
+    lastUpdated: now,
+    createdAt:   new Date(document.getElementById('f-created').value).getTime()||now
   };
   if(cid){ Object.assign(orders.find(x=>x.id===cid),fields); }
-  else { orders.push({id:nextId(),createdAt:now,...fields}); }
+  else { orders.push({id:nextId(),...fields}); }
   persist(); closeModal(); render();
 }
 
