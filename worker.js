@@ -170,8 +170,8 @@ async function handleShopifyWebhook(request, env, cors) {
     addr.zip, addr.country,
   ].filter(Boolean);
 
-  // SKUs from qualifying line items (one per line)
-  const skus = qualifying.map(i => i.sku || i.name).filter(Boolean).join('\n');
+  // Barcodes from qualifying line items (one per line), fallback to SKU then name
+  const skus = qualifying.map(i => i.barcode || i.sku || i.name).filter(Boolean).join('\n');
 
   // Generate next MHC-XXX ID
   const maxNum = orders.length
