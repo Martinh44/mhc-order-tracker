@@ -47,6 +47,8 @@ header{background:#fff;border-bottom:2px solid #D85A30;padding:11px 16px;display
 
 /* Card */
 .card{background:#fff;border:1px solid #e4e4e4;border-left:3px solid #D85A30;border-radius:3px;padding:9px 10px;margin-bottom:7px;cursor:pointer;user-select:none}
+.card.draft{border-left-color:#9e9e9e}
+.c-shopify{font-size:10px;font-weight:700;color:#9e9e9e;margin-bottom:2px;letter-spacing:.3px}
 .card:last-child{margin-bottom:0}
 .card:hover{border-color:#D85A30}
 .card.dragging{opacity:.25}
@@ -175,6 +177,7 @@ const T = {
   zh: {
     appSub:'订单追踪', langToggle:'EN', newOrder:'+ 新订单',
     syncing:'↻ 同步中…', synced:'✓ 已同步', offline:'⚠ 离线', saveFailed:'⚠ 保存失败',
+    draftCol:'待处理',
     stages:['下单','已付款','生产中','已发货','已签收'],
     secCustomer:'客户信息', secOrder:'订单信息', secProgress:'进度', secNotes:'备注',
     customerName:'客户姓名', email:'邮箱', phone:'电话', address:'地址',
@@ -186,6 +189,7 @@ const T = {
   en: {
     appSub:'Order Tracker', langToggle:'中文', newOrder:'+ New Order',
     syncing:'↻ syncing…', synced:'✓ synced', offline:'⚠ offline', saveFailed:'⚠ save failed',
+    draftCol:'Incoming',
     stages:['Order Raised','Invoice Paid','In Production','Shipped','Delivered'],
     secCustomer:'Customer', secOrder:'Order Details', secProgress:'Progress', secNotes:'Notes',
     customerName:'Customer Name', email:'Email', phone:'Phone', address:'Address',
@@ -373,12 +377,40 @@ function fmtDate(ts) {
 }
 
 // ── Render ────────────────────────────────────────────────────────────
+function makeCard(o) {
+  const d=daysAgo(o.createdAt||o.lastUpdated);
+  const shipped=colOf(o)>=3;
+  const card=document.createElement('div');
+  card.className='card'+(o.draft?' draft':''); card.draggable=true; card.dataset.id=o.id;
+  card.innerHTML=
+    `<div class="c-top"><span class="c-id">${o.id}</span><span class="badge ${bCls(d,shipped)}">${d}${lang==='zh'?'天':'d'}</span></div>`+
+    (o.shopifyOrderName?`<div class="c-shopify">${esc(o.shopifyOrderName)}</div>`:'')+
+    (o.customerName?`<div class="c-customer">${esc(o.customerName)}</div>`:'')+
+    (o.partNumbers?`<div class="c-parts">${esc(o.partNumbers.split('\n')[0])}</div>`:'');
+  card.addEventListener('dragstart',e=>{e.dataTransfer.setData('text',o.id);requestAnimationFrame(()=>card.classList.add('dragging'));});
+  card.addEventListener('dragend',()=>card.classList.remove('dragging'));
+  card.addEventListener('click',()=>openModal(o.id));
+  return card;
+}
+
 function render() {
   const board=document.getElementById('board');
   board.innerHTML='';
   const stages=t('stages');
+
+  // Draft column — Shopify auto-created cards waiting for action
+  const draftOrders=orders.filter(o=>o.draft);
+  const draftCol=document.createElement('div'); draftCol.className='col';
+  const draftHd=document.createElement('div'); draftHd.className='col-hd';
+  draftHd.innerHTML=`<h2>${t('draftCol')}</h2><span class="col-ct">${draftOrders.length}</span><span class="col-arrow">▶</span>`;
+  draftHd.addEventListener('click',()=>toggleCol(draftCol,draftBd));
+  const draftBd=document.createElement('div'); draftBd.className='col-bd';
+  draftOrders.forEach(o=>draftBd.appendChild(makeCard(o)));
+  draftCol.appendChild(draftHd); draftCol.appendChild(draftBd); board.appendChild(draftCol);
+
+  // Normal workflow columns — draft cards are excluded
   for(let s=0;s<5;s++){
-    const colOrders=orders.filter(o=>colOf(o)===s);
+    const colOrders=orders.filter(o=>!o.draft&&colOf(o)===s);
     const col=document.createElement('div'); col.className='col';
     const hd=document.createElement('div'); hd.className='col-hd';
     hd.innerHTML=`<h2>${stages[s]}</h2><span class="col-ct">${colOrders.length}</span><span class="col-arrow">▶</span>`;
@@ -389,24 +421,12 @@ function render() {
     bd.addEventListener('drop',e=>{
       e.preventDefault();bd.classList.remove('over');
       const o=orders.find(x=>x.id===e.dataTransfer.getData('text')); if(!o) return;
+      o.draft=false;
       for(let i=0;i<=s;i++) o.stages[i]=true;
       for(let i=s+1;i<5;i++) o.stages[i]=false;
       o.lastUpdated=Date.now(); persist(); render();
     });
-    colOrders.forEach(o=>{
-      const d=daysAgo(o.createdAt||o.lastUpdated);
-      const shipped=colOf(o)>=3;
-      const card=document.createElement('div');
-      card.className='card'; card.draggable=true; card.dataset.id=o.id;
-      card.innerHTML=
-        `<div class="c-top"><span class="c-id">${o.id}</span><span class="badge ${bCls(d,shipped)}">${d}${lang==='zh'?'天':'d'}</span></div>`+
-        (o.customerName?`<div class="c-customer">${esc(o.customerName)}</div>`:'')+
-        (o.partNumbers?`<div class="c-parts">${esc(o.partNumbers.split('\n')[0])}</div>`:'');
-      card.addEventListener('dragstart',e=>{e.dataTransfer.setData('text',o.id);requestAnimationFrame(()=>card.classList.add('dragging'));});
-      card.addEventListener('dragend',()=>card.classList.remove('dragging'));
-      card.addEventListener('click',()=>openModal(o.id));
-      bd.appendChild(card);
-    });
+    colOrders.forEach(o=>bd.appendChild(makeCard(o)));
     col.appendChild(hd); col.appendChild(bd); board.appendChild(col);
   }
 }
@@ -485,8 +505,12 @@ function saveOrder(){
     lastUpdated: now,
     createdAt:   new Date(document.getElementById('f-created').value).getTime()||now
   };
-  if(cid){ Object.assign(orders.find(x=>x.id===cid),fields); }
-  else { orders.push({id:nextId(),...fields}); }
+  if(cid){
+    const existing=orders.find(x=>x.id===cid);
+    const wasDraft=existing?.draft;
+    Object.assign(existing,fields);
+    if(wasDraft&&fields.stages.some(Boolean)) existing.draft=false;
+  } else { orders.push({id:nextId(),...fields}); }
   persist(); closeModal(); render();
 }
 

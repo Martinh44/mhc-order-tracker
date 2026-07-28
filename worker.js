@@ -1,7 +1,8 @@
 // MHC Order Tracker — Cloudflare Worker
 // Required environment variables (set in Cloudflare dashboard):
-//   MHC_PIN    — the shared 6-digit PIN code (Secret)
-//   NTFY_TOPIC — your private ntfy topic name (Secret)
+//   MHC_PIN                — the shared 6-digit PIN code (Secret)
+//   NTFY_TOPIC             — your private ntfy topic name (Secret)
+//   SHOPIFY_WEBHOOK_SECRET — webhook signing secret from Shopify (Secret)
 // Required KV binding:
 //   MHC_KV     — KV namespace named MHC_ORDERS
 
@@ -9,16 +10,24 @@ const LOCKOUT_AFTER  = 10;   // wrong attempts before 15-min lockout
 const BLOCK_AFTER    = 50;   // wrong attempts total before permanent block
 const LOCKOUT_TTL    = 900;  // 15 minutes in seconds
 
+const SHOPIFY_VENDORS = ['mhjc', 'vanté automotive', 'vante automotive'];
+
 export default {
   async fetch(request, env) {
     const cors = {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, PUT, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, X-PIN',
     };
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: cors });
+    }
+
+    // Shopify webhook — authenticated via HMAC, not PIN
+    const url = new URL(request.url);
+    if (request.method === 'POST' && url.pathname === '/webhook/shopify') {
+      return handleShopifyWebhook(request, env, cors);
     }
 
     const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
@@ -80,8 +89,6 @@ export default {
       env.MHC_KV.delete(lockoutKey),
     ]);
 
-    const url = new URL(request.url);
-
     if (request.method === 'GET' && url.pathname === '/orders') {
       const data = await env.MHC_KV.get('orders');
       return new Response(data || '{"orders":[],"savedAt":0}', {
@@ -107,6 +114,101 @@ export default {
   },
 };
 
+// ── Shopify webhook handler ───────────────────────────────────────────
+async function handleShopifyWebhook(request, env, cors) {
+  const hmacHeader = request.headers.get('X-Shopify-Hmac-Sha256');
+  if (!hmacHeader || !env.SHOPIFY_WEBHOOK_SECRET) {
+    return new Response('Unauthorized', { status: 401, headers: cors });
+  }
+
+  const rawBody = await request.text();
+
+  // Verify HMAC-SHA256 signature
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(env.SHOPIFY_WEBHOOK_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sigBytes = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(rawBody));
+  const expected = btoa(String.fromCharCode(...new Uint8Array(sigBytes)));
+  if (expected !== hmacHeader) {
+    return new Response('Unauthorized', { status: 401, headers: cors });
+  }
+
+  const order = JSON.parse(rawBody);
+
+  // Only process line items from MHJC / Vanté Automotive
+  const qualifying = (order.line_items || []).filter(
+    item => SHOPIFY_VENDORS.includes((item.vendor || '').toLowerCase().trim())
+  );
+  if (!qualifying.length) {
+    return new Response(JSON.stringify({ ok: true, skipped: true }), {
+      headers: { ...cors, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Read current orders from KV
+  const stored = await env.MHC_KV.get('orders');
+  const data = stored ? JSON.parse(stored) : { orders: [], savedAt: 0 };
+  const orders = Array.isArray(data) ? data : (data.orders || []);
+
+  // Deduplicate — Shopify can fire the same webhook more than once
+  const shopifyId = String(order.id);
+  if (orders.some(o => o.shopifyOrderId === shopifyId)) {
+    return new Response(JSON.stringify({ ok: true, duplicate: true }), {
+      headers: { ...cors, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Build address
+  const addr = order.shipping_address || order.billing_address || {};
+  const addressParts = [
+    addr.address1, addr.address2,
+    addr.city, addr.province_code || addr.province,
+    addr.zip, addr.country,
+  ].filter(Boolean);
+
+  // SKUs from qualifying line items (one per line)
+  const skus = qualifying.map(i => i.sku || i.name).filter(Boolean).join('\n');
+
+  // Generate next MHC-XXX ID
+  const maxNum = orders.length
+    ? Math.max(...orders.map(o => parseInt(o.id.slice(4), 10) || 0))
+    : 0;
+  const newId = 'MHC-' + String(maxNum + 1).padStart(3, '0');
+
+  const now = Date.now();
+  const card = {
+    id: newId,
+    draft: true,
+    shopifyOrderId: shopifyId,
+    shopifyOrderName: order.name || '',
+    customerName: [
+      addr.first_name || order.customer?.first_name,
+      addr.last_name  || order.customer?.last_name,
+    ].filter(Boolean).join(' '),
+    email:        order.email || order.customer?.email || '',
+    phone:        order.phone || addr.phone || order.customer?.phone || '',
+    address:      addressParts.join(', '),
+    partNumbers:  skus,
+    tracking:     '',
+    notes:        '',
+    stages:       [false, false, false, false, false],
+    createdAt:    new Date(order.created_at || now).getTime(),
+    lastUpdated:  now,
+  };
+
+  orders.push(card);
+  await env.MHC_KV.put('orders', JSON.stringify({ orders, savedAt: now }));
+
+  return new Response(JSON.stringify({ ok: true, id: newId }), {
+    headers: { ...cors, 'Content-Type': 'application/json' },
+  });
+}
+
+// ── ntfy alert ───────────────────────────────────────────────────────
 async function notify(env, ip, attempts) {
   if (!env.NTFY_TOPIC) return;
   try {
