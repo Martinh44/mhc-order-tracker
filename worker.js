@@ -3,6 +3,8 @@
 //   MHC_PIN                — the shared 6-digit PIN code (Secret)
 //   NTFY_TOPIC             — your private ntfy topic name (Secret)
 //   SHOPIFY_WEBHOOK_SECRET — webhook signing secret from Shopify (Secret)
+//   SHOPIFY_CLIENT_ID      — Shopify app client ID, for barcode lookups (Secret)
+//   SHOPIFY_CLIENT_SECRET  — Shopify app client secret, for barcode lookups (Secret)
 // Required KV binding:
 //   MHC_KV     — KV namespace named MHC_ORDERS
 
@@ -11,6 +13,8 @@ const BLOCK_AFTER    = 50;   // wrong attempts total before permanent block
 const LOCKOUT_TTL    = 900;  // 15 minutes in seconds
 
 const SHOPIFY_VENDORS = ['mhjc', 'vanté automotive', 'vante automotive'];
+const SHOPIFY_SHOP    = 'ujyuxq-uh.myshopify.com';
+const SHOPIFY_API     = '2026-07';
 
 export default {
   async fetch(request, env) {
@@ -170,8 +174,11 @@ async function handleShopifyWebhook(request, env, cors) {
     addr.zip, addr.country,
   ].filter(Boolean);
 
-  // Barcodes from qualifying line items (one per line), fallback to SKU then name
-  const skus = qualifying.map(i => i.barcode || i.sku || i.name).filter(Boolean).join('\n');
+  // Order webhooks don't include barcodes, so look them up per variant; fall back to SKU then name
+  const barcodes = await fetchBarcodes(env, qualifying.map(i => i.variant_id));
+  const skus = qualifying
+    .map(i => barcodes[i.variant_id] || i.sku || i.name)
+    .filter(Boolean).join('\n');
 
   // Generate next MHC-XXX ID
   const maxNum = orders.length
@@ -206,6 +213,51 @@ async function handleShopifyWebhook(request, env, cors) {
   return new Response(JSON.stringify({ ok: true, id: newId }), {
     headers: { ...cors, 'Content-Type': 'application/json' },
   });
+}
+
+// ── Shopify barcode lookup ───────────────────────────────────────────
+async function getShopifyToken(env) {
+  const cached = await env.MHC_KV.get('shopify_token');
+  if (cached) return cached;
+  const r = await fetch(`https://${SHOPIFY_SHOP}/admin/oauth/access_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: env.SHOPIFY_CLIENT_ID,
+      client_secret: env.SHOPIFY_CLIENT_SECRET,
+    }),
+  });
+  if (!r.ok) throw new Error('token ' + r.status);
+  const { access_token, expires_in } = await r.json();
+  await env.MHC_KV.put('shopify_token', access_token, {
+    expirationTtl: Math.max(60, (expires_in || 86400) - 600),
+  });
+  return access_token;
+}
+
+async function fetchBarcodes(env, variantIds) {
+  const ids = [...new Set(variantIds.filter(Boolean))];
+  if (!ids.length || !env.SHOPIFY_CLIENT_ID || !env.SHOPIFY_CLIENT_SECRET) return {};
+  try {
+    const token = await getShopifyToken(env);
+    const r = await fetch(`https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API}/graphql.json`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },
+      body: JSON.stringify({
+        query: 'query($ids:[ID!]!){nodes(ids:$ids){...on ProductVariant{legacyResourceId barcode}}}',
+        variables: { ids: ids.map(id => `gid://shopify/ProductVariant/${id}`) },
+      }),
+    });
+    const { data } = await r.json();
+    const map = {};
+    for (const n of data?.nodes || []) {
+      if (n?.barcode) map[n.legacyResourceId] = n.barcode;
+    }
+    return map;
+  } catch {
+    return {};
+  }
 }
 
 // ── ntfy alert ───────────────────────────────────────────────────────
