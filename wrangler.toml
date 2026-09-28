@@ -1,0 +1,14 @@
+name = "mhc-api"
+main = "worker.js"
+account_id = "1333fa5d5bce438a4f2b1753e47478a5"
+compatibility_date = "2026-05-10"
+workers_dev = true
+preview_urls = false
+keep_vars = true   # keep SHOPIFY_WEBHOOK_SECRET (plain text var set in the dashboard)
+
+[[kv_namespaces]]
+binding = "MHC_KV"
+id = "4dbd955455194556a7f62f23d7f5c72d"
+
+[triggers]
+crons = ["*/10 * * * *"]
