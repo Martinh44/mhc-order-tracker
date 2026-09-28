@@ -505,7 +505,43 @@ async function addMatteVariant(env, productId, multiplier) {
   const c = await createVariantNextTo(env, p.id, base, v);
   if (c.error) return { error: `${p.title}: ${c.error}` };
   await setCarbonParagraph(env, p);
+  const tr = await translateOptions(env, p.id);
+  if (tr.error) return { error: `${p.title}: translations — ${tr.error}` };
   return { added: true, title: p.title };
+}
+
+// Option translations for the store's languages (same table as theme_premium/translate_options.py).
+// Registered as Shopify translations, so they also show in cart, checkout and order emails.
+const OPTION_TRANSLATIONS = {
+  'Material': { de: 'Material', fr: 'Matériau', es: 'Material', it: 'Materiale', ja: '素材' },
+  'Finish': { de: 'Oberfläche', fr: 'Finition', es: 'Acabado', it: 'Finitura', ja: '仕上げ' },
+  '2x2 Twill Carbon Fibre': { de: 'Carbon 2x2 Twill', fr: 'Carbone sergé 2x2', es: 'Fibra de carbono twill 2x2', it: 'Carbonio twill 2x2', ja: '2x2綾織カーボン' },
+  'Forged Carbon Fibre': { de: 'Forged Carbon', fr: 'Carbone forgé', es: 'Carbono forjado', it: 'Carbonio forgiato', ja: 'フォージドカーボン' },
+  'Gloss': { de: 'Glänzend', fr: 'Brillant', es: 'Brillante', it: 'Lucido', ja: 'グロス' },
+  'Matte': { de: 'Matt', fr: 'Mat', es: 'Mate', it: 'Opaco', ja: 'マット' },
+};
+
+async function translateOptions(env, productId) {
+  const { product } = await shopifyGql(env, `query($id:ID!){product(id:$id){options{id optionValues{id}}}}`, { id: productId });
+  const ids = product.options.flatMap(o => [o.id, ...o.optionValues.map(v => v.id)]);
+  const { translatableResourcesByIds: res } = await shopifyGql(env, `query($ids:[ID!]!){translatableResourcesByIds(first:50,resourceIds:$ids){
+    nodes{resourceId translatableContent{key value digest}}}}`, { ids });
+  const vars = {};
+  const defs = [];
+  const calls = [];
+  res.nodes.forEach((n, i) => {
+    const c = n.translatableContent.find(x => x.key === 'name');
+    const t = c && OPTION_TRANSLATIONS[c.value];
+    if (!t) return;
+    vars[`r${i}`] = n.resourceId;
+    vars[`t${i}`] = Object.entries(t).map(([locale, value]) => ({ locale, key: 'name', value, translatableContentDigest: c.digest }));
+    defs.push(`$r${i}:ID!,$t${i}:[TranslationInput!]!`);
+    calls.push(`x${i}:translationsRegister(resourceId:$r${i},translations:$t${i}){userErrors{message}}`);
+  });
+  if (!calls.length) return { error: null };
+  const data = await shopifyGql(env, `mutation(${defs.join(',')}){${calls.join(' ')}}`, vars);
+  const errs = Object.values(data).flatMap(r => r.userErrors);
+  return { error: errs.length ? errs[0].message : null };
 }
 
 async function alertOnce(env, title, body) {
