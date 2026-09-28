@@ -22,6 +22,7 @@ const SHOPIFY_API     = '2026-07';
 // (Collections → "Carbon Option Pricing (Packtechz)" → Forged carbon / Matte finish price multiplier).
 const PRICING_COLLECTION = 'gid://shopify/Collection/353647591542';
 const TWILL_VALUE        = '2x2 Twill Carbon Fibre';
+const ONEBYONE_VALUE     = '1x1 Twill Carbon Fibre';
 const FORGED_VALUE       = 'Forged Carbon Fibre';
 
 export default {
@@ -290,9 +291,9 @@ async function notify(env, ip, attempts) {
 }
 
 // ── Carbon option price sync ─────────────────────────────────────────
-// Every Packtechz product: Material (2x2 Twill | Forged) × Finish (Gloss | Matte, matte for twill only).
-// Base price = 2x2 twill / gloss. Forged = base × forged multiplier, twill matte = base × matte multiplier,
-// both rounded to .95. Only variants whose price is off get written, so running often is cheap.
+// Every Packtechz product: Material (2x2 Twill | 1x1 Twill | Forged) × Finish (Gloss | Matte, matte for twill only).
+// Base price = 2x2 twill / gloss. 1x1 gloss = base; 2x2 and 1x1 matte = base × matte multiplier;
+// forged = base × forged multiplier (rounded to .95). Only variants whose price is off get written.
 async function shopifyGql(env, query, variables) {
   const token = await getShopifyToken(env);
   for (let attempt = 0; attempt < 6; attempt++) {
@@ -324,6 +325,7 @@ async function syncCarbonPrices(env) {
   const updates = [];
   const newProducts = [];     // only a default variant yet: needs Material + Finish
   const needsFinish = [];     // has Material but no Finish option yet
+  const needs1x1 = [];        // has Material × Finish but no 1x1 twill yet
   let forgedM = null, matteM = null;
   let cursor = null;
   do {
@@ -343,17 +345,22 @@ async function syncCarbonPrices(env) {
       const names = p.options.map(o => o.name);
       if (p.status === 'ACTIVE' && vs.length === 1 && vs[0].selectedOptions[0]?.value === 'Default Title') { newProducts.push(p.id); continue; }
       if (p.status === 'ACTIVE' && names.length === 1 && names[0] === 'Material') needsFinish.push(p.id);
+      if (p.status === 'ACTIVE' && names.length === 2 && names[0] === 'Material' && names[1] === 'Finish'
+          && !vs.some(v => optionValue(v, 'Material') === ONEBYONE_VALUE)) needs1x1.push(p.id);
       const finish = v => optionValue(v, 'Finish');
       const base = vs.find(v => optionValue(v, 'Material') === TWILL_VALUE && (!finish(v) || finish(v) === 'Gloss'));
       if (!base) continue;
+      const find = (mat, fin) => vs.find(v => optionValue(v, 'Material') === mat && (!fin || finish(v) === fin));
       const targets = [
-        [vs.find(v => optionValue(v, 'Material') === FORGED_VALUE), forgedM],
-        [vs.find(v => optionValue(v, 'Material') === TWILL_VALUE && finish(v) === 'Matte'), matteM],
+        [find(FORGED_VALUE), forgedM],
+        [find(TWILL_VALUE, 'Matte'), matteM],
+        [find(ONEBYONE_VALUE, 'Gloss'), 1],        // 1x1 gloss costs the same as 2x2 gloss
+        [find(ONEBYONE_VALUE, 'Matte'), matteM],
       ];
       for (const [v, m] of targets) {
         if (!v) continue;
-        const price = priceX(base.price, m);
-        const compareAtPrice = priceX(base.compareAtPrice, m);
+        const price = m === 1 ? base.price : priceX(base.price, m);
+        const compareAtPrice = m === 1 ? base.compareAtPrice : priceX(base.compareAtPrice, m);
         if (Number(v.price) !== Number(price) || Number(v.compareAtPrice || 0) !== Number(compareAtPrice || 0)) {
           updates.push({ productId: p.id, variant: { id: v.id, price, compareAtPrice } });
         }
@@ -383,7 +390,7 @@ async function syncCarbonPrices(env) {
     const data = await shopifyGql(env, `mutation(${defs.join(',')}){${calls.join(' ')}}`, vars);
     for (const res of Object.values(data)) errors.push(...res.userErrors);
   }
-  return { forgedM, matteM, updated: updates.length, errors, newProducts, needsFinish };
+  return { forgedM, matteM, updated: updates.length, errors, newProducts, needsFinish, needs1x1 };
 }
 
 // Runs every 10 minutes: complete new active Packtechz products, then fix any stale prices.
@@ -395,28 +402,35 @@ async function runCarbonJobs(env) {
     if (result.error) problems.push(result.error);
     problems.push(...(result.errors || []).map(e => e.message));
     const done = [];
-    // A few per run keeps us well inside the Worker subrequest limit; the rest follow 10 minutes later
-    for (const id of (result.newProducts || []).slice(0, 2)) {
-      const r = await addForgedVariant(env, id, result.forgedM);
-      if (r.error) { problems.push(r.error); continue; }
-      if (r.added) {
-        const m = await addMatteVariant(env, id, result.matteM);
-        if (m.error) problems.push(m.error); else done.push(r.title);
+    // At most 2 products per run (a new product takes ~17 requests) keeps us inside the Worker subrequest
+    // limit; anything left over is picked up 10 minutes later.
+    const queue = [
+      ...(result.newProducts || []).map(id => ['new', id]),
+      ...(result.needsFinish || []).map(id => ['finish', id]),
+      ...(result.needs1x1 || []).map(id => ['1x1', id]),
+    ].slice(0, 2);
+    for (const [stage, id] of queue) {
+      if (stage === 'new') {
+        const r = await addForgedVariant(env, id, result.forgedM);
+        if (r.error) { problems.push(r.error); continue; }
+        if (!r.added) continue;                        // half-finished listing: leave it until it has a price and SKU
       }
+      if (stage === 'new' || stage === 'finish') {
+        const m = await addMatteVariant(env, id, result.matteM);
+        if (m.error) { problems.push(m.error); continue; }
+      }
+      const o = await add1x1Variants(env, id, result.matteM);
+      if (o.error) problems.push(o.error); else if (o.added) done.push(o.title);
     }
-    for (const id of (result.needsFinish || []).slice(0, 3)) {
-      const m = await addMatteVariant(env, id, result.matteM);
-      if (m.error) problems.push(m.error); else if (m.added) done.push(m.title);
-    }
-    console.log('carbon jobs', JSON.stringify({ ...result, newProducts: (result.newProducts || []).length, needsFinish: (result.needsFinish || []).length, done }));
+    console.log('carbon jobs', JSON.stringify({ ...result, newProducts: (result.newProducts || []).length, needsFinish: (result.needsFinish || []).length, needs1x1: (result.needs1x1 || []).length, done }));
   } catch (e) {
     problems.push(String(e && e.message || e));
   }
   if (problems.length) await alertOnce(env, 'Carbon option pricing needs attention', problems.slice(0, 5).join('\n'));
 }
 
-const CARBON_PARA = '<p><strong>Choose your carbon.</strong> Classic 2x2 twill carbon fibre in a high-gloss or matte clearcoat, ' +
-  'or forged carbon fibre in high-gloss. Forged carbon has a marbled pattern that is unique to every part, so no two are alike.</p>';
+const CARBON_PARA = '<p><strong>Choose your carbon.</strong> Classic 2x2 twill or 1x1 twill carbon fibre in a high-gloss or matte ' +
+  'clearcoat, or forged carbon fibre in high-gloss. Forged carbon has a marbled pattern that is unique to every part, so no two are alike.</p>';
 
 const VARIANT_FIELDS = `id price compareAtPrice sku barcode inventoryPolicy taxable deliveryProfile{id} selectedOptions{name value}
   inventoryItem{tracked requiresShipping measurement{weight{value unit}}
@@ -505,6 +519,47 @@ async function addMatteVariant(env, productId, multiplier) {
   const c = await createVariantNextTo(env, p.id, base, v);
   if (c.error) return { error: `${p.title}: ${c.error}` };
   await setCarbonParagraph(env, p);
+  return { added: true, title: p.title };
+}
+
+// Step 3: add 1x1 twill (gloss = 2x2 gloss price, matte = matte multiplier), ordered 2x2 | 1x1 | Forged, then translate.
+async function add1x1Variants(env, productId, matteM) {
+  const { product: p } = await shopifyGql(env, `query($id:ID!){product(id:$id){id title descriptionHtml
+    options{id name optionValues{name}} variants(first:10){nodes{${VARIANT_FIELDS}}}}}`, { id: productId });
+  const names = p.options.map(o => o.name);
+  if (names.length !== 2 || names[0] !== 'Material' || names[1] !== 'Finish') return { added: false };
+  const mat = p.options[0];
+  if (mat.optionValues.some(v => v.name === ONEBYONE_VALUE)) return { added: false };
+  const base = p.variants.nodes.find(v => optionValue(v, 'Material') === TWILL_VALUE && optionValue(v, 'Finish') === 'Gloss');
+  if (!base || !base.sku) return { added: false };
+
+  let r = await shopifyGql(env, `mutation($p:ID!,$o:OptionUpdateInput!,$a:[OptionValueCreateInput!]){
+    productOptionUpdate(productId:$p,option:$o,optionValuesToAdd:$a,variantStrategy:LEAVE_AS_IS){userErrors{message}}}`,
+    { p: p.id, o: { id: mat.id }, a: [{ name: ONEBYONE_VALUE }] });
+  if (r.productOptionUpdate.userErrors.length) return { error: `${p.title}: ${r.productOptionUpdate.userErrors[0].message}` };
+
+  const variants = [
+    cloneVariant(base, [{ optionName: 'Material', name: ONEBYONE_VALUE }, { optionName: 'Finish', name: 'Gloss' }],
+      base.price, base.compareAtPrice, '-1X1'),
+    cloneVariant(base, [{ optionName: 'Material', name: ONEBYONE_VALUE }, { optionName: 'Finish', name: 'Matte' }],
+      priceX(base.price, matteM), priceX(base.compareAtPrice, matteM), '-1X1-MT'),
+  ];
+  r = await shopifyGql(env, `mutation($pid:ID!,$v:[ProductVariantsBulkInput!]!){
+    productVariantsBulkCreate(productId:$pid,variants:$v){productVariants{id} userErrors{message}}}`, { pid: p.id, v: variants });
+  if (r.productVariantsBulkCreate.userErrors.length) return { error: `${p.title}: ${r.productVariantsBulkCreate.userErrors[0].message}` };
+  const ids = r.productVariantsBulkCreate.productVariants.map(v => v.id);
+
+  // Ordering only sticks once the value has variants
+  await shopifyGql(env, `mutation($p:ID!,$o:[OptionReorderInput!]!){productOptionsReorder(productId:$p,options:$o){userErrors{message}}}`,
+    { p: p.id, o: [{ name: 'Material', values: [{ name: TWILL_VALUE }, { name: ONEBYONE_VALUE }, { name: FORGED_VALUE }] },
+                   { name: 'Finish', values: [{ name: 'Gloss' }, { name: 'Matte' }] }] });
+
+  if (base.deliveryProfile?.id) {
+    r = await shopifyGql(env, `mutation($id:ID!,$p:DeliveryProfileInput!){deliveryProfileUpdate(id:$id,profile:$p){userErrors{message}}}`,
+      { id: base.deliveryProfile.id, p: { variantsToAssociate: ids } });
+    if (r.deliveryProfileUpdate.userErrors.length) return { error: `${p.title}: shipping profile — ${r.deliveryProfileUpdate.userErrors[0].message}` };
+  }
+  await setCarbonParagraph(env, p);
   const tr = await translateOptions(env, p.id);
   if (tr.error) return { error: `${p.title}: translations — ${tr.error}` };
   return { added: true, title: p.title };
@@ -516,6 +571,7 @@ const OPTION_TRANSLATIONS = {
   'Material': { de: 'Material', fr: 'Matériau', es: 'Material', it: 'Materiale', ja: '素材' },
   'Finish': { de: 'Oberfläche', fr: 'Finition', es: 'Acabado', it: 'Finitura', ja: '仕上げ' },
   '2x2 Twill Carbon Fibre': { de: 'Carbon 2x2 Twill', fr: 'Carbone sergé 2x2', es: 'Fibra de carbono twill 2x2', it: 'Carbonio twill 2x2', ja: '2x2綾織カーボン' },
+  '1x1 Twill Carbon Fibre': { de: 'Carbon 1x1 Twill', fr: 'Carbone sergé 1x1', es: 'Fibra de carbono twill 1x1', it: 'Carbonio twill 1x1', ja: '1x1綾織カーボン' },
   'Forged Carbon Fibre': { de: 'Forged Carbon', fr: 'Carbone forgé', es: 'Carbono forjado', it: 'Carbonio forgiato', ja: 'フォージドカーボン' },
   'Gloss': { de: 'Glänzend', fr: 'Brillant', es: 'Brillante', it: 'Lucido', ja: 'グロス' },
   'Matte': { de: 'Matt', fr: 'Mat', es: 'Mate', it: 'Opaco', ja: 'マット' },
