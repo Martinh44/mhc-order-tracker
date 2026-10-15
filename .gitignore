@@ -1,0 +1,5 @@
+node_modules/
+.wrangler/
+.dev.vars
+.rc_admin_key
+.pt_pin

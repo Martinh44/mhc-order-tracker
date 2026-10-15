@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#ffffff">
+<title>PakTechz Orders · Vanté Automotive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tomorrow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tracker.css">
+</head>
+<body>
+
+<div class="pin" id="pin">
+  <img src="https://cdn.shopify.com/s/files/1/0692/3475/3654/files/vante-logo-a6192e.png?v=1790154922&width=480" alt="Vanté Automotive">
+  <h1 data-i="pinTitle"></h1>
+  <input id="pin-in" type="password" inputmode="numeric" maxlength="6" autocomplete="off" aria-label="PIN">
+  <div class="err" id="pin-err"></div>
+</div>
+
+<header>
+  <div class="bar">
+    <div class="brand">
+      <img src="https://cdn.shopify.com/s/files/1/0692/3475/3654/files/vante-logo-a6192e.png?v=1790154922&width=360" alt="Vanté Automotive">
+      <span class="sep"></span><b><span class="lg" data-i="title"></span><span class="sh" data-i="titleShort"></span></b>
+    </div>
+    <div class="grow"></div>
+    <label class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" aria-label="Search">
+    </label>
+    <div class="status" id="status"><span class="dot"></span><span class="txt"></span></div>
+    <button class="icon-btn lang-btn" id="lang-btn"></button>
+    <button class="icon-btn" id="sync-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
+    <button class="btn btn-red btn-new" id="new-btn">+ <span class="long" data-i="newOrder"></span></button>
+  </div>
+</header>
+
+<div class="stats" id="stats"></div>
+<div class="tabs" id="tabs"></div>
+<main class="board" id="board"></main>
+<div style="text-align:center;padding:0 0 28px"><button class="btn btn-text" id="bin-btn" style="color:var(--muted)" data-i="recentlyDeleted"></button></div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="d-title"></aside>
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'https://mhc-api.raspy-fog-edb1.workers.dev';
+const FINISHES = ['2x2 Twill · Gloss','2x2 Twill · Matte','1x1 Twill · Gloss','1x1 Twill · Matte','Forged · Gloss'];
+const PROD = 2, LATE_DAYS = 35, SOON_DAYS = 30;
+const DAY = 86400000;
+
+const T = {
+  zh: {
+    langBtn: 'EN', pinTitle: 'PakTechz 订单追踪', pinPH: '请输入 PIN 码', title: 'PakTechz 订单', titleShort: 'PakTechz',
+    pinWrong: 'PIN 码错误', pinLocked: '尝试次数过多，请15分钟后再试', pinBlocked: '此设备已被封锁，请联系 Vanté', pinOffline: '无网络连接，请检查网络后重试',
+    search: '搜索客户、零件、订单…', refresh: '刷新', newOrder: '新订单', new: '新',
+    connecting: '连接中…', saved: '已保存', upToDate: '已同步', syncing: '同步中…', saving: '保存中…', offline: '离线',
+    unsaved: n => `离线 · ${n} 项未保存`,
+    incoming: '待处理', stages: ['下单', '已付款', '生产中', '已发货', '已签收'],
+    stIncoming: ['待处理', '待处理'], stOpen: ['进行中订单', '进行中'], stProd: ['生产中', '生产中'], stLate: [`逾期（超过${LATE_DAYS}天）`, '逾期'], lateFilter: '只看逾期订单',
+    emptyIncoming: 'Shopify 的 PakTechz 订单会自动出现在这里', empty: '暂无订单',
+    noFinish: '未选表面', morePart: n => `另有 ${n} 个零件`, tracking: '物流单号', days: '天',
+    prodDay: d => `生产第 ${d} / ${LATE_DAYS} 天`, daysLeft: n => `剩余 ${n} 天`, lateOver: n => `逾期 ${n} 天`, lateDay: d => `逾期 · 第 ${d} 天`,
+    dayOf: d => `第 ${d} / ${LATE_DAYS} 天`, late: '逾期', created: '创建于',
+    parts: '零件', progress: '进度', customer: '客户信息', order: '订单信息', notes: '备注',
+    partPH: '零件编号，例如 PT0047-3', chooseFinish: '选择表面…', qty: '数量', removePart: '删除零件', addPart: '+ 添加零件',
+    draftHint: '来自 Shopify 的新订单，选择一个阶段开始处理。',
+    name: '姓名', email: '邮箱', phone: '电话', address: '收货地址', trackingNo: '物流单号', orderDate: '订单日期',
+    lastUpdated: '最后更新', del: '删除', cancel: '取消', save: '保存', close: '关闭',
+    delConfirm: id => `确认删除 ${id}？90天内可以恢复。`, deletedToast: '订单已删除，可在“最近删除”中恢复',
+    recentlyDeleted: '最近删除', loading: '加载中…', deletedOn: '删除于', restore: '恢复', restored: '已恢复',
+    restoreFail: '恢复失败，请重试', binEmpty: '最近90天没有删除的订单。', loadFail: '加载失败，请检查网络。',
+    finish: { '2x2 Twill · Gloss': '2x2斜纹 · 亮光', '2x2 Twill · Matte': '2x2斜纹 · 哑光', '1x1 Twill · Gloss': '1x1平纹 · 亮光', '1x1 Twill · Matte': '1x1平纹 · 哑光', 'Forged · Gloss': '锻造碳 · 亮光' },
+  },
+  en: {
+    langBtn: '中文', pinTitle: 'PakTechz order tracker', pinPH: 'Enter PIN', title: 'PakTechz Orders', titleShort: 'PakTechz',
+    pinWrong: 'Incorrect PIN', pinLocked: 'Too many attempts. Try again in 15 minutes.', pinBlocked: 'This device is blocked. Contact Vanté.', pinOffline: 'No connection. Check your internet and try again.',
+    search: 'Search customer, part, order…', refresh: 'Refresh', newOrder: 'New order', new: 'New',
+    connecting: 'Connecting…', saved: 'Saved', upToDate: 'Up to date', syncing: 'Syncing…', saving: 'Saving…', offline: 'Offline',
+    unsaved: n => `Offline · ${n} unsaved`,
+    incoming: 'Incoming', stages: ['Order Raised', 'Invoice Paid', 'In Production', 'Shipped', 'Delivered'],
+    stIncoming: ['Incoming', 'Incoming'], stOpen: ['Open orders', 'Open'], stProd: ['In production', 'In prod'], stLate: [`Late (over ${LATE_DAYS} days)`, 'Late'], lateFilter: 'Show only late orders',
+    emptyIncoming: 'Shopify orders for PakTechz parts land here', empty: 'No orders',
+    noFinish: 'No finish', morePart: n => `+ ${n} more part${n > 1 ? 's' : ''}`, tracking: 'Tracking', days: 'd',
+    prodDay: d => `Production day ${d} of ${LATE_DAYS}`, daysLeft: n => `${n} days left`, lateOver: n => `LATE · ${n}d over`, lateDay: d => `LATE · day ${d}`,
+    dayOf: d => `day ${d} of ${LATE_DAYS}`, late: 'Late', created: 'Created',
+    parts: 'Parts', progress: 'Progress', customer: 'Customer', order: 'Order', notes: 'Notes',
+    partPH: 'Part number, e.g. PT0047-3', chooseFinish: 'Choose finish…', qty: 'Quantity', removePart: 'Remove part', addPart: '+ Add part',
+    draftHint: 'New from Shopify. Choose a stage to move it onto the board.',
+    name: 'Name', email: 'Email', phone: 'Phone', address: 'Shipping address', trackingNo: 'Tracking number', orderDate: 'Order date',
+    lastUpdated: 'Last updated', del: 'Delete', cancel: 'Cancel', save: 'Save', close: 'Close',
+    delConfirm: id => `Delete ${id}? You can restore it for 90 days.`, deletedToast: 'Order deleted · restore it from Recently deleted',
+    recentlyDeleted: 'Recently deleted', loading: 'Loading…', deletedOn: 'Deleted', restore: 'Restore', restored: 'Restored',
+    restoreFail: 'Could not restore, try again', binEmpty: 'Nothing deleted in the last 90 days.', loadFail: 'Could not load. Check your connection.',
+    finish: {},
+  },
+};
+
+// ── storage (private windows can throw) ───────────────────────────────
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+};
+
+let lang = store.get('pt-lang', 'zh');
+let pin = store.get('pt-pin', '');
+let orders = store.get('pt-cache', []);
+let pending = store.get('pt-pending', {});      // id -> card | {__delete:true}; survives reloads while offline
+let tab = store.get('pt-tab', 1);
+let query = '', onlyLate = false, editing = null, flushing = false, statusKey = ['', 'connecting'];
+
+const t = k => T[lang][k];
+const fin = f => T[lang].finish[f] || f;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const midnight = ts => { const d = new Date(ts); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+const daysSince = ts => Math.round((midnight(Date.now()) - midnight(ts)) / DAY);
+const fmt = ts => { const d = new Date(ts); return lang === 'zh' ? `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日` : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); };
+const toDateInput = ts => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const fromDateInput = v => { const [y,m,d] = v.split('-').map(Number); return y ? new Date(y, m-1, d, 12).getTime() : null; };
+const label = o => o.num ? 'PT-' + String(o.num).padStart(3, '0') : t('new');
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i]').forEach(el => { el.textContent = t(el.dataset.i); });
+  $('pin-in').placeholder = t('pinPH');
+  $('q').placeholder = t('search');
+  $('lang-btn').textContent = t('langBtn');
+  $('sync-btn').title = $('sync-btn').ariaLabel = t('refresh');
+  setStatus(...statusKey);
+}
+$('lang-btn').onclick = () => {
+  if (editing) readForm();
+  lang = lang === 'zh' ? 'en' : 'zh'; store.set('pt-lang', lang);
+  applyLang(); render(); if (editing) drawDrawer();
+};
+
+function colOf(o) {
+  if (o.draft) return -1;
+  let s = 0; (o.stages || []).forEach((v, i) => { if (v) s = i; });
+  return s;
+}
+function prodDays(o) { return colOf(o) === PROD && o.stageAt?.[PROD] ? daysSince(o.stageAt[PROD]) : null; }
+function isLate(o) { const d = prodDays(o); return d != null && d > LATE_DAYS; }
+
+// ── API ───────────────────────────────────────────────────────────────
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json', 'X-PIN': pin, ...(opts.headers || {}) } });
+  if (r.status === 401) { logout(); throw new Error('auth'); }
+  if (r.status === 429) { const b = await r.json().catch(() => ({})); throw new Error(b.error || 'locked'); }
+  if (!r.ok) throw new Error('http ' + r.status);
+  return r.json();
+}
+
+function setStatus(kind, key) {
+  statusKey = [kind, key];
+  const s = $('status'); s.className = 'status ' + kind;
+  s.querySelector('.txt').textContent = key === 'unsaved' ? t('unsaved')(pendingCount()) : t(key);
+}
+function pendingCount() { return Object.keys(pending).length; }
+const offlineStatus = () => setStatus('err', pendingCount() ? 'unsaved' : 'offline');
+
+async function flush() {
+  if (flushing) return;
+  flushing = true;
+  try {
+    for (const id of Object.keys(pending)) {
+      const p = pending[id];
+      if (p.__delete) await api('/pt/orders/' + encodeURIComponent(id), { method: 'DELETE' });
+      else {
+        const { card } = await api('/pt/orders/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(p) });
+        if (pending[id] === p) { const i = orders.findIndex(o => o.id === id); if (i >= 0) orders[i] = card; }
+      }
+      if (pending[id] === p) delete pending[id];
+      store.set('pt-pending', pending);
+    }
+    setStatus('ok', 'saved');
+  } catch (e) {
+    if (e.message !== 'auth') offlineStatus();
+    throw e;
+  } finally { flushing = false; store.set('pt-cache', orders); render(); }
+}
+
+async function sync(loud) {
+  if (loud) setStatus('busy', 'syncing');
+  try {
+    await flush();
+    const data = await api('/pt/orders?t=' + Date.now());
+    // anything not yet saved stays on top of what the server has
+    const byId = new Map((data.orders || []).map(o => [o.id, o]));
+    for (const [id, p] of Object.entries(pending)) p.__delete ? byId.delete(id) : byId.set(id, p);
+    orders = [...byId.values()];
+    store.set('pt-cache', orders);
+    setStatus('ok', 'upToDate');
+    render();
+  } catch (e) { if (e.message !== 'auth') offlineStatus(); }
+}
+
+function saveCard(card) {
+  card.lastUpdated = Date.now();
+  const i = orders.findIndex(o => o.id === card.id);
+  if (i >= 0) orders[i] = card; else orders.push(card);
+  pending[card.id] = card;
+  store.set('pt-pending', pending); store.set('pt-cache', orders);
+  setStatus('busy', 'saving');
+  render();
+  flush().catch(() => {});
+}
+
+function deleteCard(id) {
+  orders = orders.filter(o => o.id !== id);
+  pending[id] = { __delete: true };
+  store.set('pt-pending', pending); store.set('pt-cache', orders);
+  render();
+  flush().catch(() => {});
+  toast(t('deletedToast'));
+}
+
+function moveTo(o, s) {
+  const c = structuredClone(o), now = Date.now();
+  c.stages = [0, 1, 2, 3, 4].map(j => j <= s);
+  c.stageAt = [0, 1, 2, 3, 4].map(j => j <= s ? (o.stageAt?.[j] || now) : null);
+  c.draft = false;
+  return c;
+}
+
+// ── render ────────────────────────────────────────────────────────────
+function matches(o) {
+  if (onlyLate && !isLate(o)) return false;
+  if (!query) return true;
+  const hay = [label(o), o.shopifyOrderName, o.customerName, o.email, o.tracking, o.notes,
+    ...(o.items || []).flatMap(i => [i.part, i.finish, fin(i.finish), i.title])].join(' ').toLowerCase();
+  return query.split(/\s+/).every(w => hay.includes(w));
+}
+
+function cardHtml(o) {
+  const items = o.items || [];
+  const late = isLate(o), pd = prodDays(o);
+  let prod = '';
+  if (pd != null) {
+    const cls = late ? 'over' : pd >= SOON_DAYS ? 'soon' : '';
+    const txt = late ? `<span class="late-pill">${esc(t('lateOver')(pd - LATE_DAYS))}</span>` : `<b>${esc(t('daysLeft')(LATE_DAYS - pd))}</b>`;
+    prod = `<div class="prodbar ${cls}"><div class="lbl"><span>${esc(t('prodDay')(pd))}</span>${txt}</div>
+      <div class="trk"><div class="fill" style="width:${Math.min(100, pd / LATE_DAYS * 100)}%"></div></div></div>`;
+  }
+  const lines = items.slice(0, 2).map(i => `<div class="c-item"><span class="c-part">${esc(i.part || '—')}</span>
+      ${i.qty > 1 ? `<span class="c-qty">× ${i.qty}</span>` : ''}
+      <span class="chip ${i.finish ? '' : 'none'}">${esc(i.finish ? fin(i.finish) : t('noFinish'))}</span></div>`).join('');
+  return `<article class="card${o.draft ? ' draft' : ''}${late ? ' late' : ''}" draggable="true" tabindex="0" data-id="${esc(o.id)}">
+    <div class="c-top"><span class="c-id">${esc(label(o))}</span>${o.shopifyOrderName ? `<span class="c-shop">${esc(o.shopifyOrderName)}</span>` : ''}
+      <span class="c-age" title="${esc(t('created') + ' ' + fmt(o.createdAt))}">${daysSince(o.createdAt)}${t('days')}</span></div>
+    ${o.customerName ? `<div class="c-name">${esc(o.customerName)}</div>` : ''}
+    ${lines}${items.length > 2 ? `<div class="c-more">${esc(t('morePart')(items.length - 2))}</div>` : ''}
+    ${o.tracking && colOf(o) >= 3 ? `<div class="c-track">${esc(t('tracking'))} ${esc(o.tracking)}</div>` : ''}
+    ${prod}
+  </article>`;
+}
+
+const statLabel = ([lg, sh]) => `<span><i class="lg">${esc(lg)}</i><i class="sh">${esc(sh)}</i></span>`;
+
+function render() {
+  const cols = [{ key: -1, name: t('incoming') }, ...t('stages').map((name, key) => ({ key, name }))];
+  const vis = orders.filter(matches);
+  const by = new Map(cols.map(c => [c.key, []]));
+  vis.forEach(o => by.get(colOf(o))?.push(o));
+  for (const list of by.values()) list.sort((a, b) => (isLate(b) - isLate(a)) || (a.createdAt - b.createdAt));
+
+  const lateN = orders.filter(isLate).length;
+  $('stats').innerHTML =
+    `<div class="stat">${statLabel(t('stIncoming'))}<b>${orders.filter(o => o.draft).length}</b></div>
+     <div class="stat">${statLabel(t('stOpen'))}<b>${orders.filter(o => !o.draft && colOf(o) < 4).length}</b></div>
+     <div class="stat">${statLabel(t('stProd'))}<b>${orders.filter(o => colOf(o) === PROD).length}</b></div>
+     <button class="stat${lateN ? ' late' : ''}${onlyLate ? ' active' : ''}" id="late-filter" title="${esc(t('lateFilter'))}">${statLabel(t('stLate'))}<b>${lateN}</b></button>`;
+  $('late-filter').onclick = () => { onlyLate = !onlyLate; if (onlyLate) tab = PROD; render(); };
+
+  $('tabs').innerHTML = cols.map(c => {
+    const n = by.get(c.key).length, hasLate = c.key === PROD && by.get(c.key).some(isLate);
+    return `<button class="tab${tab === c.key ? ' active' : ''}${hasLate ? ' has-late' : ''}" data-tab="${c.key}">${esc(c.name)}<b>${n}</b></button>`;
+  }).join('');
+  $('tabs').querySelector('.tab.active')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+
+  $('board').innerHTML = cols.map(c => {
+    const list = by.get(c.key);
+    const cls = c.key === -1 ? ' incoming' : c.key === PROD ? ' prod' : '';
+    const empty = c.key === -1 ? t('emptyIncoming') : t('empty');
+    return `<section class="col${cls}${tab === c.key ? ' show' : ''}">
+      <div class="col-hd"><span class="pip"></span><h2>${esc(c.name)}</h2><span class="n">${list.length}</span></div>
+      <div class="col-bd" data-col="${c.key}">${list.length ? list.map(cardHtml).join('') : `<div class="empty">${esc(empty)}</div>`}</div>
+    </section>`;
+  }).join('');
+}
+
+// ── board events ──────────────────────────────────────────────────────
+$('board').addEventListener('click', e => { const c = e.target.closest('.card'); if (c) openDrawer(c.dataset.id); });
+$('board').addEventListener('keydown', e => { const c = e.target.closest('.card'); if (c && e.key === 'Enter') openDrawer(c.dataset.id); });
+$('board').addEventListener('dragstart', e => {
+  const c = e.target.closest('.card'); if (!c) return;
+  e.dataTransfer.setData('text/plain', c.dataset.id); e.dataTransfer.effectAllowed = 'move';
+  requestAnimationFrame(() => c.classList.add('dragging'));
+});
+$('board').addEventListener('dragend', e => e.target.closest('.card')?.classList.remove('dragging'));
+$('board').addEventListener('dragover', e => {
+  const bd = e.target.closest('.col-bd'); if (!bd || bd.dataset.col === '-1') return;
+  e.preventDefault(); document.querySelectorAll('.col-bd.over').forEach(x => x !== bd && x.classList.remove('over')); bd.classList.add('over');
+});
+$('board').addEventListener('dragleave', e => { const bd = e.target.closest('.col-bd'); if (bd && !bd.contains(e.relatedTarget)) bd.classList.remove('over'); });
+$('board').addEventListener('drop', e => {
+  const bd = e.target.closest('.col-bd'); if (!bd || bd.dataset.col === '-1') return;
+  e.preventDefault(); bd.classList.remove('over');
+  const o = orders.find(x => x.id === e.dataTransfer.getData('text/plain'));
+  const s = +bd.dataset.col;
+  if (o && colOf(o) !== s) saveCard(moveTo(o, s));
+});
+$('tabs').addEventListener('click', e => { const b = e.target.closest('.tab'); if (b) { tab = +b.dataset.tab; store.set('pt-tab', tab); render(); } });
+$('q').addEventListener('input', e => { query = e.target.value.trim().toLowerCase(); render(); });
+$('sync-btn').onclick = () => sync(true);
+$('new-btn').onclick = () => openDrawer(null);
+
+// ── drawer ────────────────────────────────────────────────────────────
+const check = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5L20 7"/></svg>';
+const blankItem = () => ({ part: '', finish: '', qty: 1, title: '' });
+
+function blankCard() {
+  return { id: 'M' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), num: null, draft: false,
+    customerName: '', email: '', phone: '', address: '', items: [blankItem()],
+    tracking: '', notes: '', stages: [true, false, false, false, false], stageAt: [Date.now(), null, null, null, null],
+    createdAt: Date.now(), lastUpdated: Date.now() };
+}
+
+function openDrawer(id) {
+  const o = id ? orders.find(x => x.id === id) : null;
+  if (id && !o) return;
+  editing = o ? structuredClone(o) : blankCard();
+  editing.isNew = !o;
+  if (!editing.items?.length) editing.items = [blankItem()];
+  editing.stageAt = editing.stageAt || [null, null, null, null, null];
+  drawDrawer();
+  $('scrim').classList.add('open'); $('drawer').classList.add('open');
+  const isNew = editing.isNew;
+  setTimeout(() => (isNew ? $('f-name') : $('d-close'))?.focus(), 50);
+}
+
+function closeDrawer() { $('scrim').classList.remove('open'); $('drawer').classList.remove('open'); editing = null; }
+
+function readForm() {
+  if (!editing || !$('f-name')) return;
+  const v = id => $(id)?.value ?? '';
+  Object.assign(editing, { customerName: v('f-name').trim(), email: v('f-email').trim(), phone: v('f-phone').trim(),
+    address: v('f-addr').trim(), tracking: v('f-track').trim(), notes: v('f-notes') });
+  const c = fromDateInput(v('f-created')); if (c) editing.createdAt = c;
+  editing.items = [...document.querySelectorAll('.item')].map((row, i) => ({
+    part: row.querySelector('.i-part').value.trim(), finish: row.querySelector('.i-fin').value,
+    qty: Math.max(1, parseInt(row.querySelector('.i-qty').value, 10) || 1), title: editing.items[i]?.title || '' }));
+  document.querySelectorAll('.s-date').forEach(inp => { const ts = fromDateInput(inp.value); if (ts) editing.stageAt[+inp.dataset.s] = ts; });
+}
+
+function drawDrawer() {
+  const o = editing, cur = colOf(o), late = isLate(o), pd = prodDays(o), names = t('stages');
+  const steps = names.map((name, i) => {
+    const done = !o.draft && o.stages[i], isCur = !o.draft && i === cur;
+    const extra = i === PROD && pd != null ? (late ? `<span class="late-pill">${esc(t('lateDay')(pd))}</span>` : `<span class="hint">${esc(t('dayOf')(pd))}</span>`) : '';
+    return `<div class="step${done ? ' done' : ''}${isCur ? ' cur' : ''}">
+      <span class="c">${done ? check : ''}</span>
+      <div><button class="lab" data-step="${i}">${esc(name)}</button>${extra}</div>
+      ${done && o.stageAt[i] ? `<input class="s-date" type="date" data-s="${i}" value="${toDateInput(o.stageAt[i])}" aria-label="${esc(name)}">` : '<span></span>'}
+    </div>`;
+  }).join('');
+  const items = o.items.map((it, i) => `<div class="item">
+      <div class="item-row">
+        <input class="in i-part" value="${esc(it.part)}" placeholder="${esc(t('partPH'))}" aria-label="${esc(t('parts'))}">
+        <select class="in i-fin${it.finish ? '' : ' unset'}" aria-label="Finish">
+          <option value="">${esc(t('chooseFinish'))}</option>${FINISHES.map(f => `<option value="${esc(f)}"${f === it.finish ? ' selected' : ''}>${esc(fin(f))}</option>`).join('')}
+        </select>
+        <input class="in i-qty" type="number" min="1" value="${it.qty || 1}" aria-label="${esc(t('qty'))}">
+        <button class="x" data-rm="${i}" title="${esc(t('removePart'))}" aria-label="${esc(t('removePart'))}">×</button>
+      </div>${it.title ? `<div class="t">${esc(it.title)}</div>` : ''}</div>`).join('');
+
+  $('drawer').innerHTML = `
+    <div class="d-hd"><div><h3 id="d-title">${esc(o.isNew ? t('newOrder') : label(o))}</h3>
+      <div class="sub">${o.shopifyOrderName ? 'Shopify ' + esc(o.shopifyOrderName) + ' · ' : ''}${esc(o.draft ? t('incoming') : names[cur])}${late ? ` · <b style="color:var(--red)">${esc(t('late'))}</b>` : ''}</div></div>
+      <div class="grow"></div><button class="icon-btn" id="d-close" aria-label="${esc(t('close'))}">✕</button></div>
+    <div class="d-bd">
+      <div class="sec"><h4>${esc(t('parts'))}</h4><div class="items">${items}</div><button class="add" id="add-item">${esc(t('addPart'))}</button></div>
+      <div class="sec"><h4>${esc(t('progress'))}</h4>${o.draft ? `<div class="hint" style="margin-bottom:8px">${esc(t('draftHint'))}</div>` : ''}<div class="steps">${steps}</div></div>
+      <div class="sec"><h4>${esc(t('customer'))}</h4><div class="grid">
+        <label class="f"><span>${esc(t('name'))}</span><input class="in" id="f-name" value="${esc(o.customerName)}"></label>
+        <div class="grid g2"><label class="f"><span>${esc(t('email'))}</span><input class="in" id="f-email" type="email" value="${esc(o.email)}"></label>
+        <label class="f"><span>${esc(t('phone'))}</span><input class="in" id="f-phone" type="tel" value="${esc(o.phone)}"></label></div>
+        <label class="f"><span>${esc(t('address'))}</span><textarea class="in" id="f-addr" rows="2">${esc(o.address)}</textarea></label></div></div>
+      <div class="sec"><h4>${esc(t('order'))}</h4><div class="grid g2">
+        <label class="f"><span>${esc(t('trackingNo'))}</span><input class="in" id="f-track" value="${esc(o.tracking)}"></label>
+        <label class="f"><span>${esc(t('orderDate'))}</span><input class="in" id="f-created" type="date" value="${toDateInput(o.createdAt)}"></label></div></div>
+      <div class="sec"><h4>${esc(t('notes'))}</h4><textarea class="in" id="f-notes" rows="3">${esc(o.notes)}</textarea></div>
+      ${o.isNew ? '' : `<div class="meta">${esc(t('lastUpdated'))} ${esc(fmt(o.lastUpdated))}</div>`}
+    </div>
+    <div class="d-ft">${o.isNew ? '' : `<button class="btn btn-text" id="d-del">${esc(t('del'))}</button>`}
+      <div class="grow"></div><button class="btn btn-ghost" id="d-cancel">${esc(t('cancel'))}</button><button class="btn btn-red" id="d-save">${esc(t('save'))}</button></div>`;
+
+  $('d-close').onclick = $('d-cancel').onclick = closeDrawer;
+  $('d-save').onclick = () => {
+    readForm();
+    const c = editing; delete c.isNew;
+    c.items = c.items.filter(i => i.part || i.finish || i.title);
+    saveCard(c); closeDrawer(); toast(t('saved'));
+  };
+  if ($('d-del')) $('d-del').onclick = () => { if (confirm(t('delConfirm')(label(editing)))) { const id = editing.id; closeDrawer(); deleteCard(id); } };
+  $('add-item').onclick = () => { readForm(); editing.items.push(blankItem()); drawDrawer(); document.querySelectorAll('.i-part')[editing.items.length - 1]?.focus(); };
+  $('drawer').querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { readForm(); editing.items.splice(+b.dataset.rm, 1); if (!editing.items.length) editing.items.push(blankItem()); drawDrawer(); });
+  $('drawer').querySelectorAll('[data-step]').forEach(b => b.onclick = () => { readForm(); const keep = editing.isNew; editing = Object.assign(moveTo(editing, +b.dataset.step), { isNew: keep }); drawDrawer(); });
+  $('drawer').querySelectorAll('.i-fin').forEach(s => s.onchange = () => s.classList.toggle('unset', !s.value));
+}
+
+$('scrim').onclick = closeDrawer;
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && editing) closeDrawer(); });
+
+// ── recently deleted ──────────────────────────────────────────────────
+async function openBin() {
+  editing = null;
+  $('drawer').innerHTML = `<div class="d-hd"><h3>${esc(t('recentlyDeleted'))}</h3><div class="grow"></div><button class="icon-btn" id="d-close" aria-label="${esc(t('close'))}">✕</button></div>
+    <div class="d-bd" id="bin"><div class="hint" style="margin-top:16px">${esc(t('loading'))}</div></div>`;
+  $('d-close').onclick = closeDrawer;
+  $('scrim').classList.add('open'); $('drawer').classList.add('open');
+  try {
+    const { orders: list } = await api('/pt/deleted');
+    list.sort((a, b) => b.deletedAt - a.deletedAt);
+    $('bin').innerHTML = list.length ? list.map(o => `<div class="bin-row"><div><b>${esc(label(o))}</b> ${esc(o.customerName || '')}
+      <small>${esc(t('deletedOn'))} ${esc(fmt(o.deletedAt))} · ${esc((o.items || []).map(i => i.part).filter(Boolean).join(', '))}</small></div>
+      <button class="btn btn-ghost" data-restore="${esc(o.id)}">${esc(t('restore'))}</button></div>`).join('')
+      : `<div class="hint" style="margin-top:16px">${esc(t('binEmpty'))}</div>`;
+    $('bin').querySelectorAll('[data-restore]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      try { await api('/pt/restore/' + encodeURIComponent(b.dataset.restore), { method: 'POST' }); b.closest('.bin-row').remove(); toast(t('restored')); sync(); }
+      catch { b.disabled = false; toast(t('restoreFail')); }
+    });
+  } catch { $('bin').innerHTML = `<div class="hint" style="margin-top:16px">${esc(t('loadFail'))}</div>`; }
+}
+$('bin-btn').onclick = openBin;
+
+// ── misc ──────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg) { const el = $('toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2400); }
+
+function logout() { pin = ''; store.del('pt-pin'); $('pin').classList.remove('hidden'); $('pin-in').value = ''; $('pin-in').focus(); }
+
+let started = false;
+function start() {
+  $('pin').classList.add('hidden');
+  render();
+  sync(true);
+  if (started) return;
+  started = true;
+  setInterval(() => { if (document.visibilityState === 'visible' && !editing) sync(); }, 45000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !editing) sync(); });
+  window.addEventListener('online', () => sync(true));
+}
+
+applyLang();
+(function initPin() {
+  const input = $('pin-in'), err = $('pin-err');
+  async function attempt(p) {
+    try {
+      const r = await fetch(API + '/pt/orders?t=' + Date.now(), { headers: { 'X-PIN': p } });
+      if (r.ok) { pin = p; store.set('pt-pin', p); start(); return 'ok'; }
+      if (r.status === 429) {
+        const b = await r.json().catch(() => ({}));
+        err.textContent = b.error === 'blocked' ? t('pinBlocked') : t('pinLocked');
+        input.disabled = true; return 'locked';
+      }
+      err.textContent = t('pinWrong'); return 'wrong';
+    } catch { err.textContent = t('pinOffline'); return 'offline'; }
+  }
+  input.addEventListener('input', async () => {
+    err.textContent = '';
+    input.value = input.value.replace(/\D/g, '');
+    if (input.value.length === 6 && (await attempt(input.value)) !== 'ok') { input.value = ''; input.focus(); }
+  });
+  if (pin) attempt(pin).then(res => {
+    if (res === 'wrong') { store.del('pt-pin'); pin = ''; }
+    if (res === 'offline') { start(); return; }   // keep working from the saved copy; changes sync once back online
+    input.focus();
+  });
+  else input.focus();
+})();
+</script>
+</body>
+</html>
