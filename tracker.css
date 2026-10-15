@@ -201,3 +201,6 @@ select.in.unset{color:var(--red);border-color:var(--red-line)}
 }
 .stat i{font-style:normal}
 .step .hint{margin-left:8px}
+.c-ship{margin:-2px 0 6px}
+.chip.ship-air{border-color:var(--ink);color:#fff;background:var(--ink);font-weight:600}
+.chip.ship-sea{background:var(--bg)}

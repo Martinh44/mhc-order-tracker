@@ -13,6 +13,14 @@ const MAX_BODY = 64 * 1024;
 const JC_VENDORS = ['mhjc', 'vanté automotive', 'vante automotive'];
 const PT_VENDORS = ['mhpt'];
 
+// PakTechz ships regular orders by sea and express orders by air
+export const SHIPPING = ['sea', 'air'];
+export function shippingFromOrder(order) {
+  const titles = (order.shipping_lines || []).map(l => l.title || l.code || '').filter(Boolean);
+  if (!titles.length) return { shipping: '', shippingMethod: '' };
+  return { shipping: titles.some(t => /express/i.test(t)) ? 'air' : 'sea', shippingMethod: titles.join(' + ') };
+}
+
 export const FINISHES = ['2x2 Twill · Gloss', '2x2 Twill · Matte', '1x1 Twill · Gloss', '1x1 Twill · Matte', 'Forged · Gloss'];
 
 // Variant titles look like "1x1 Twill Carbon Fibre / Matte"
@@ -49,6 +57,8 @@ function cleanPt(key, body, existing) {
     shopifyOrderId: existing?.shopifyOrderId || s(body.shopifyOrderId), shopifyOrderName: existing?.shopifyOrderName || s(body.shopifyOrderName),
     customerName: s(body.customerName), email: s(body.email), phone: s(body.phone), address: s(body.address),
     items, tracking: s(body.tracking), notes: s(body.notes, 10000), stages, stageAt,
+    shipping: SHIPPING.includes(body.shipping) ? body.shipping : '',
+    shippingMethod: existing?.shippingMethod || s(body.shippingMethod, 200),
     createdAt: Number(body.createdAt) || existing?.createdAt || Date.now(),
     lastUpdated: Date.now(),
   };
@@ -240,6 +250,7 @@ export async function addPaktechzOrder(env, order, fetchBarcodes) {
       part: basePart(barcodes[i.variant_id] || i.sku || ''), finish: finishFromVariant(i.variant_title),
       qty: i.quantity || 1, title: i.title || i.name || '',
     })),
+    ...shippingFromOrder(order),
     tracking: '', notes: '', stages: [true, false, false, false, false], stageAt: [created, null, null, null, null],
     createdAt: created, lastUpdated: now,
   };

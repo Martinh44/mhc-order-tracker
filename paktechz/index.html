@@ -68,7 +68,7 @@ const T = {
     dayOf: d => `第 ${d} / ${LATE_DAYS} 天`, late: '逾期', created: '创建于',
     parts: '零件', progress: '进度', customer: '客户信息', order: '订单信息', notes: '备注',
     partPH: '零件编号，例如 PT0047-3', chooseFinish: '选择表面…', qty: '数量', removePart: '删除零件', addPart: '+ 添加零件',
-    name: '姓名', email: '邮箱', phone: '电话', address: '收货地址', trackingNo: '物流单号', orderDate: '订单日期',
+    name: '姓名', email: '邮箱', phone: '电话', address: '收货地址', trackingNo: '物流单号', orderDate: '订单日期', shipping: '运输方式', chooseShip: '选择运输方式…', shopifyShip: 'Shopify 运费：', ship: { sea: '海运', air: '空运' },
     lastUpdated: '最后更新', del: '删除', cancel: '取消', save: '保存', close: '关闭',
     delConfirm: id => `确认删除 ${id}？90天内可以恢复。`, deletedToast: '订单已删除，可在“最近删除”中恢复',
     recentlyDeleted: '最近删除', loading: '加载中…', deletedOn: '删除于', restore: '恢复', restored: '已恢复',
@@ -89,7 +89,7 @@ const T = {
     dayOf: d => `day ${d} of ${LATE_DAYS}`, late: 'Late', created: 'Created',
     parts: 'Parts', progress: 'Progress', customer: 'Customer', order: 'Order', notes: 'Notes',
     partPH: 'Part number, e.g. PT0047-3', chooseFinish: 'Choose finish…', qty: 'Quantity', removePart: 'Remove part', addPart: '+ Add part',
-    name: 'Name', email: 'Email', phone: 'Phone', address: 'Shipping address', trackingNo: 'Tracking number', orderDate: 'Order date',
+    name: 'Name', email: 'Email', phone: 'Phone', address: 'Shipping address', trackingNo: 'Tracking number', orderDate: 'Order date', shipping: 'Shipping', chooseShip: 'Choose shipping…', shopifyShip: 'Shopify shipping: ', ship: { sea: 'Sea freight', air: 'Air freight' },
     lastUpdated: 'Last updated', del: 'Delete', cancel: 'Cancel', save: 'Save', close: 'Close',
     delConfirm: id => `Delete ${id}? You can restore it for 90 days.`, deletedToast: 'Order deleted · restore it from Recently deleted',
     recentlyDeleted: 'Recently deleted', loading: 'Loading…', deletedOn: 'Deleted', restore: 'Restore', restored: 'Restored',
@@ -230,7 +230,7 @@ function moveTo(o, s) {
 function matches(o) {
   if (onlyLate && !isLate(o)) return false;
   if (!query) return true;
-  const hay = [label(o), o.shopifyOrderName, o.customerName, o.email, o.tracking, o.notes,
+  const hay = [label(o), o.shopifyOrderName, o.customerName, o.email, o.tracking, o.notes, o.shipping && t('ship')[o.shipping], o.shippingMethod,
     ...(o.items || []).flatMap(i => [i.part, i.finish, fin(i.finish), i.title])].join(' ').toLowerCase();
   return query.split(/\s+/).every(w => hay.includes(w));
 }
@@ -252,6 +252,7 @@ function cardHtml(o) {
     <div class="c-top"><span class="c-id">${esc(label(o))}</span>${o.shopifyOrderName ? `<span class="c-shop">${esc(o.shopifyOrderName)}</span>` : ''}
       <span class="c-age" title="${esc(t('created') + ' ' + fmt(o.createdAt))}">${daysSince(o.createdAt)}${t('days')}</span></div>
     ${o.customerName ? `<div class="c-name">${esc(o.customerName)}</div>` : ''}
+    ${o.shipping ? `<div class="c-ship"><span class="chip ship-${o.shipping}" title="${esc(o.shippingMethod || '')}">${esc(t('ship')[o.shipping])}</span></div>` : ''}
     ${lines}${items.length > 2 ? `<div class="c-more">${esc(t('morePart')(items.length - 2))}</div>` : ''}
     ${o.tracking && colOf(o) >= 3 ? `<div class="c-track">${esc(t('tracking'))} ${esc(o.tracking)}</div>` : ''}
     ${prod}
@@ -324,7 +325,7 @@ const blankItem = () => ({ part: '', finish: '', qty: 1, title: '' });
 
 function blankCard() {
   return { id: 'M' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), num: null, draft: false,
-    customerName: '', email: '', phone: '', address: '', items: [blankItem()],
+    customerName: '', email: '', phone: '', address: '', items: [blankItem()], shipping: '', shippingMethod: '',
     tracking: '', notes: '', stages: [true, false, false, false, false], stageAt: [Date.now(), null, null, null, null],
     createdAt: Date.now(), lastUpdated: Date.now() };
 }
@@ -348,7 +349,7 @@ function readForm() {
   if (!editing || !$('f-name')) return;
   const v = id => $(id)?.value ?? '';
   Object.assign(editing, { customerName: v('f-name').trim(), email: v('f-email').trim(), phone: v('f-phone').trim(),
-    address: v('f-addr').trim(), tracking: v('f-track').trim(), notes: v('f-notes') });
+    address: v('f-addr').trim(), tracking: v('f-track').trim(), notes: v('f-notes'), shipping: v('f-ship') });
   const c = fromDateInput(v('f-created')); if (c) editing.createdAt = c;
   editing.items = [...document.querySelectorAll('.item')].map((row, i) => ({
     part: row.querySelector('.i-part').value.trim(), finish: row.querySelector('.i-fin').value,
@@ -390,6 +391,9 @@ function drawDrawer() {
         <label class="f"><span>${esc(t('phone'))}</span><input class="in" id="f-phone" type="tel" value="${esc(o.phone)}"></label></div>
         <label class="f"><span>${esc(t('address'))}</span><textarea class="in" id="f-addr" rows="2">${esc(o.address)}</textarea></label></div></div>
       <div class="sec"><h4>${esc(t('order'))}</h4><div class="grid g2">
+        <label class="f"><span>${esc(t('shipping'))}</span><select class="in${o.shipping ? '' : ' unset'}" id="f-ship">
+          <option value="">${esc(t('chooseShip'))}</option>${['sea', 'air'].map(k => `<option value="${k}"${o.shipping === k ? ' selected' : ''}>${esc(t('ship')[k])}</option>`).join('')}
+        </select>${o.shippingMethod ? `<div class="hint">${esc(t('shopifyShip') + o.shippingMethod)}</div>` : ''}</label><span></span>
         <label class="f"><span>${esc(t('trackingNo'))}</span><input class="in" id="f-track" value="${esc(o.tracking)}"></label>
         <label class="f"><span>${esc(t('orderDate'))}</span><input class="in" id="f-created" type="date" value="${toDateInput(o.createdAt)}"></label></div></div>
       <div class="sec"><h4>${esc(t('notes'))}</h4><textarea class="in" id="f-notes" rows="3">${esc(o.notes)}</textarea></div>
@@ -409,7 +413,7 @@ function drawDrawer() {
   $('add-item').onclick = () => { readForm(); editing.items.push(blankItem()); drawDrawer(); document.querySelectorAll('.i-part')[editing.items.length - 1]?.focus(); };
   $('drawer').querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { readForm(); editing.items.splice(+b.dataset.rm, 1); if (!editing.items.length) editing.items.push(blankItem()); drawDrawer(); });
   $('drawer').querySelectorAll('[data-step]').forEach(b => b.onclick = () => { readForm(); const keep = editing.isNew; editing = Object.assign(moveTo(editing, +b.dataset.step), { isNew: keep }); drawDrawer(); });
-  $('drawer').querySelectorAll('.i-fin').forEach(s => s.onchange = () => s.classList.toggle('unset', !s.value));
+  $('drawer').querySelectorAll('.i-fin, #f-ship').forEach(s => s.onchange = () => s.classList.toggle('unset', !s.value));
 }
 
 $('scrim').onclick = closeDrawer;
