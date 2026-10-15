@@ -92,8 +92,15 @@ async function listPrefix(env, prefix) {
   return out;
 }
 
-const nextPtNum = cards => cards.reduce((m, c) => Math.max(m, Number(c.num) || 0), 0) + 1;
-const nextJcId = cards => jcId(cards.reduce((m, c) => Math.max(m, jcNum(c.id)), 0) + 1);
+// KV list() can lag a few seconds behind a write, so numbering also keeps a counter key (<board>:seq), which a
+// read right after a write at the same location does see. Taking the max of both never reuses a number.
+async function takeNumber(env, board, listedMax) {
+  const n = Math.max(Number(await env.MHC_KV.get(board + ':seq')) || 0, listedMax) + 1;
+  await env.MHC_KV.put(board + ':seq', String(n));
+  return n;
+}
+const nextPtNum = (env, cards) => takeNumber(env, 'pt', cards.reduce((m, c) => Math.max(m, Number(c.num) || 0), 0));
+const nextJcId = async (env, cards) => jcId(await takeNumber(env, 'jc', cards.reduce((m, c) => Math.max(m, jcNum(c.id)), 0)));
 
 // One-time copy of the old JC blob into per-card keys. Only fills keys that don't exist (and weren't deleted),
 // so running it twice — or from two places at once — writes the same values and can't undo later edits.
@@ -137,8 +144,8 @@ export async function handleBoard(name, request, url, env, cors) {
     if (!body || typeof body !== 'object') return json(cors, { error: 'Invalid card' }, 400);
     const existing = await env.MHC_KV.get(b.card + key, 'json');
     const card = b.clean(key, body, existing);
-    if (name === 'pt' && card.num == null) card.num = nextPtNum(await listPrefix(env, b.card));
-    if (name === 'jc' && !card.id) card.id = nextJcId([...await listPrefix(env, b.card), ...await listPrefix(env, b.bin)]);
+    if (name === 'pt' && card.num == null) card.num = await nextPtNum(env, await listPrefix(env, b.card));
+    if (name === 'jc' && !card.id) card.id = await nextJcId(env, [...await listPrefix(env, b.card), ...await listPrefix(env, b.bin)]);
     await env.MHC_KV.put(b.card + key, JSON.stringify(card));
     return json(cors, { ok: true, card });
   }
@@ -194,7 +201,7 @@ export async function handleLegacyJc(request, env, cors) {
     if (cur && !((Number(c.lastUpdated) || 0) > (Number(cur.lastUpdated) || 0))) continue;
     const key = cur ? cur.key : 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     let id = cur ? cur.id : c.id;
-    if (!cur && (!jcNum(id) || usedIds.has(id))) id = nextJcId([...cards, ...[...usedIds].map(i => ({ id: i }))]);
+    if (!cur && (!jcNum(id) || usedIds.has(id))) id = await nextJcId(env, [...cards, ...[...usedIds].map(i => ({ id: i }))]);
     usedIds.add(id);
     const card = { ...cleanJc(key, c, cur), id, lastUpdated: Number(c.lastUpdated) || Date.now() };
     await env.MHC_KV.put(BOARDS.jc.card + key, JSON.stringify(card));
@@ -228,7 +235,7 @@ export async function addPaktechzOrder(env, order, fetchBarcodes) {
   const barcodes = await fetchBarcodes(env, lines.map(i => i.variant_id));
   const now = Date.now(), created = new Date(order.created_at || now).getTime();
   const card = {
-    id: key, num: nextPtNum(await listPrefix(env, b.card)), draft: false, ...customerFields(order),
+    id: key, num: await nextPtNum(env, await listPrefix(env, b.card)), draft: false, ...customerFields(order),
     items: lines.map(i => ({
       part: basePart(barcodes[i.variant_id] || i.sku || ''), finish: finishFromVariant(i.variant_title),
       qty: i.quantity || 1, title: i.title || i.name || '',
@@ -253,7 +260,7 @@ export async function addJcOrder(env, order, fetchBarcodes) {
   const barcodes = await fetchBarcodes(env, lines.map(i => i.variant_id));
   const now = Date.now();
   const card = {
-    key, id: nextJcId([...cards, ...binned]), draft: false, ...customerFields(order),
+    key, id: await nextJcId(env, [...cards, ...binned]), draft: false, ...customerFields(order),
     partNumbers: lines.map(i => barcodes[i.variant_id] || i.sku || i.name).filter(Boolean).join('\n'),
     tracking: '', notes: '', stages: [true, false, false, false, false],
     createdAt: new Date(order.created_at || now).getTime(), lastUpdated: now,
