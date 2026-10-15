@@ -1,0 +1,8 @@
+{
+  "name": "mhc-api",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "worker-mailer": "1.2.1"
+  }
+}

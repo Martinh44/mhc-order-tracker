@@ -41,24 +41,26 @@
 <div class="stats" id="stats"></div>
 <div class="tabs" id="tabs"></div>
 <main class="board" id="board"></main>
+<div style="text-align:center;padding:0 0 28px"><button class="btn btn-text" id="bin-btn" style="color:var(--muted)" data-i="recentlyDeleted"></button></div>
 
 <div class="scrim" id="scrim"></div>
 <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="d-title"></aside>
 <div class="toast" id="toast"></div>
 
 <script>
-// JC Sportline board. Data format, sync and storage keys are unchanged from the original tracker:
-// the whole board is one KV blob ({orders, savedAt}) behind GET/PUT /orders, newest savedAt wins.
-const WORKER_URL = 'https://mhc-api.raspy-fog-edb1.workers.dev';
+// JC Sportline board. Cards keep their original fields and MHC-xxx numbers; since 2026-10-15 each card is saved
+// on its own (PUT/DELETE /jc/orders/<key>) instead of the whole board at once, so edits can't overwrite each other.
+const API = 'https://mhc-api.raspy-fog-edb1.workers.dev';
 const PROD = 2;
 const DAY = 86400000;
 
 const T = {
   zh: {
     langBtn: 'EN', pinTitle: 'JC Sportline 订单追踪', pinPH: '请输入 PIN 码', title: 'JC Sportline 订单', titleShort: 'JC Sportline',
-    pinWrong: 'PIN 码错误', pinLocked: '尝试次数过多，请15分钟后再试', pinBlocked: '此设备已被永久封锁，请联系管理员',
-    search: '搜索客户、零件、订单…', refresh: '从云端同步', newOrder: '新订单',
-    connecting: '连接中…', syncing: '同步中…', synced: '已同步', offline: '离线', saveFailed: '保存失败',
+    pinWrong: 'PIN 码错误', pinLocked: '尝试次数过多，请15分钟后再试', pinBlocked: '此设备已被永久封锁，请联系管理员', pinOffline: '无网络连接，请检查网络后重试',
+    search: '搜索客户、零件、订单…', refresh: '从云端同步', newOrder: '新订单', new: '新',
+    connecting: '连接中…', saved: '已保存', upToDate: '已同步', syncing: '同步中…', saving: '保存中…', offline: '离线',
+    unsaved: n => `离线 · ${n} 项未保存`,
     incoming: '待处理', stages: ['下单', '已付款', '生产中', '已发货', '已签收'],
     stIncoming: ['待处理', '待处理'], stOpen: ['进行中订单', '进行中'], stProd: ['生产中', '生产中'], stOld: ['超过30天未发货', '30天+'], oldFilter: '只看超过30天未发货的订单',
     emptyIncoming: 'Shopify 的 JC 订单会自动出现在这里', empty: '暂无订单',
@@ -69,13 +71,16 @@ const T = {
     draftHint: '来自 Shopify 的新订单，选择一个阶段开始处理。',
     created: '创建', lastUpdated: '最后更新', dAgo: '天前',
     save: '保存', del: '删除', cancel: '取消', close: '关闭', savedToast: '已保存',
-    delConfirm: id => `确认删除 ${id}？`, newOrderTitle: '新订单',
+    delConfirm: id => `确认删除 ${id}？90天内可以恢复。`, deletedToast: '订单已删除，可在“最近删除”中恢复', newOrderTitle: '新订单',
+    recentlyDeleted: '最近删除', loading: '加载中…', deletedOn: '删除于', restore: '恢复', restored: '已恢复',
+    restoreFail: '恢复失败，请重试', binEmpty: '最近90天没有删除的订单。', loadFail: '加载失败，请检查网络。',
   },
   en: {
     langBtn: '中文', pinTitle: 'JC Sportline order tracker', pinPH: 'Enter PIN', title: 'JC Sportline Orders', titleShort: 'JC Sportline',
-    pinWrong: 'Incorrect PIN', pinLocked: 'Too many attempts. Try again in 15 minutes.', pinBlocked: 'This device has been permanently blocked. Contact the administrator.',
-    search: 'Search customer, part, order…', refresh: 'Pull latest from cloud', newOrder: 'New order',
-    connecting: 'Connecting…', syncing: 'Syncing…', synced: 'Synced', offline: 'Offline', saveFailed: 'Save failed',
+    pinWrong: 'Incorrect PIN', pinLocked: 'Too many attempts. Try again in 15 minutes.', pinBlocked: 'This device has been permanently blocked. Contact the administrator.', pinOffline: 'No connection. Check your internet and try again.',
+    search: 'Search customer, part, order…', refresh: 'Pull latest from cloud', newOrder: 'New order', new: 'New',
+    connecting: 'Connecting…', saved: 'Saved', upToDate: 'Up to date', syncing: 'Syncing…', saving: 'Saving…', offline: 'Offline',
+    unsaved: n => `Offline · ${n} unsaved`,
     incoming: 'Incoming', stages: ['Order Raised', 'Invoice Paid', 'In Production', 'Shipped', 'Delivered'],
     stIncoming: ['Incoming', 'Incoming'], stOpen: ['Open orders', 'Open'], stProd: ['In production', 'In prod'], stOld: ['30+ days, not shipped', '30d+'], oldFilter: 'Show only orders 30+ days old and not shipped',
     emptyIncoming: 'Shopify orders for JC parts land here', empty: 'No orders',
@@ -86,26 +91,31 @@ const T = {
     draftHint: 'New from Shopify. Choose a stage to move it onto the board.',
     created: 'Created', lastUpdated: 'Last updated', dAgo: 'd ago',
     save: 'Save', del: 'Delete', cancel: 'Cancel', close: 'Close', savedToast: 'Saved',
-    delConfirm: id => `Delete ${id}?`, newOrderTitle: 'New order',
+    delConfirm: id => `Delete ${id}? You can restore it for 90 days.`, deletedToast: 'Order deleted · restore it from Recently deleted', newOrderTitle: 'New order',
+    recentlyDeleted: 'Recently deleted', loading: 'Loading…', deletedOn: 'Deleted', restore: 'Restore', restored: 'Restored',
+    restoreFail: 'Could not restore, try again', binEmpty: 'Nothing deleted in the last 90 days.', loadFail: 'Could not load. Check your connection.',
   },
 };
 
-// Same localStorage keys and raw formats as the original page, so logged-in devices carry on as before
+// mhc-pin / mhc-lang are the original raw-string keys, so logged-in devices carry on as before
 const ls = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
   del(k) { try { localStorage.removeItem(k); } catch {} },
+  json(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  setJson(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
 let lang = ls.get('mhc-lang') || 'zh';
-let orders = (() => { try { return JSON.parse(ls.get('mhc-orders') || '[]'); } catch { return []; } })();
 let pin = ls.get('mhc-pin') || '';
-let cid = null, editing = null, syncTimer = null, statusKey = ['', 'connecting'];
-let tab = +(ls.get('mhc-tab') ?? 0), query = '', onlyOld = false;
+let orders = ls.json('jc-cache', []);
+let pending = ls.json('jc-pending', {});        // key -> card | {__delete:true}; survives reloads while offline
+let tab = +(ls.get('mhc-tab') ?? 0), query = '', onlyOld = false, editing = null, flushing = false, statusKey = ['', 'connecting'];
 
 const t = k => T[lang][k];
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const toDateInput = ts => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const label = o => o.id || t('new');
 
 function applyLang() {
   document.documentElement.lang = lang;
@@ -122,80 +132,7 @@ $('lang-btn').onclick = () => {
   applyLang(); render(); if (editing) drawDrawer();
 };
 
-// ── PIN ───────────────────────────────────────────────────────────────
-async function verifyPin(p) {
-  try {
-    const r = await fetch(WORKER_URL + '/orders', { headers: { 'X-PIN': p } });
-    if (r.ok) return 'ok';
-    if (r.status === 429) {
-      const body = await r.json().catch(() => ({}));
-      return body.error === 'blocked' ? 'blocked' : 'locked';
-    }
-    return 'wrong';
-  } catch { return 'offline'; }
-}
-
-function startBoard() { $('pin').classList.add('hidden'); render(); pullFromWorker(true); }
-
-// ── Sync (unchanged logic) ────────────────────────────────────────────
-function setStatus(kind, key) {
-  statusKey = [kind, key];
-  const s = $('status'); s.className = 'status ' + kind; s.querySelector('.txt').textContent = t(key);
-}
-
-async function pullFromWorker(silent) {
-  if (!silent) setStatus('busy', 'syncing');
-  try {
-    const r = await fetch(WORKER_URL + '/orders?t=' + Date.now(), { headers: { 'X-PIN': pin } });
-    if (!r.ok) throw new Error('auth');
-    const data = await r.json();
-    const remote = Array.isArray(data) ? data : (data.orders || []);
-    const remoteSavedAt = data.savedAt || 0;
-    const localSavedAt  = parseInt(ls.get('mhc-saved-at') || '0', 10);
-    // Take whichever side is newer
-    if (remoteSavedAt >= localSavedAt) {
-      orders = remote;
-      ls.set('mhc-orders', JSON.stringify(orders));
-      ls.set('mhc-saved-at', String(remoteSavedAt));
-    } else {
-      await pushToWorker(localSavedAt, true);
-    }
-    setStatus('ok', 'synced');
-    if (!editing) render();
-  } catch {
-    setStatus('err', 'offline');
-  }
-}
-
-async function pushToWorker(savedAt, silent) {
-  const ts = savedAt || Date.now();
-  if (!silent) setStatus('busy', 'syncing');
-  try {
-    const r = await fetch(WORKER_URL + '/orders', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-PIN': pin },
-      body: JSON.stringify({ savedAt: ts, orders }),
-    });
-    if (!r.ok) throw 0;
-    if (!silent) setStatus('ok', 'synced');
-  } catch {
-    setStatus('err', 'saveFailed');
-  }
-}
-
-function persist() {
-  const now = Date.now();
-  ls.set('mhc-orders', JSON.stringify(orders));
-  ls.set('mhc-saved-at', String(now));
-  clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => pushToWorker(now), 800);
-}
-
-// ── Helpers (unchanged logic) ─────────────────────────────────────────
-function nextId() {
-  if (!orders.length) return 'MHC-001';
-  return 'MHC-' + String(Math.max(...orders.map(o => parseInt(o.id.slice(4), 10))) + 1).padStart(3, '0');
-}
+// ── Helpers (JC rules unchanged) ──────────────────────────────────────
 function colOf(o) { let s = 0; for (let i = 0; i < 5; i++) if (o.stages[i]) s = i; return s; }
 function boardCol(o) { return o.draft ? -1 : colOf(o); }
 function daysAgo(ts) {
@@ -214,6 +151,92 @@ function fmtDate(ts) {
 }
 const partsOf = o => (o.partNumbers || '').split('\n').map(s => s.trim()).filter(Boolean);
 
+// ── API + sync ────────────────────────────────────────────────────────
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json', 'X-PIN': pin, ...(opts.headers || {}) } });
+  if (r.status === 401) { logout(); throw new Error('auth'); }
+  if (r.status === 429) { const b = await r.json().catch(() => ({})); throw new Error(b.error || 'locked'); }
+  if (!r.ok) throw new Error('http ' + r.status);
+  return r.json();
+}
+
+function setStatus(kind, key) {
+  statusKey = [kind, key];
+  const s = $('status'); s.className = 'status ' + kind;
+  s.querySelector('.txt').textContent = key === 'unsaved' ? t('unsaved')(pendingCount()) : t(key);
+}
+function pendingCount() { return Object.keys(pending).length; }
+const offlineStatus = () => setStatus('err', pendingCount() ? 'unsaved' : 'offline');
+
+// A device that used the old page may still hold edits it never managed to upload: hand them to the server once.
+// The server merges card by card (newer wins) and never deletes, then the old copy is dropped.
+async function uploadOldCache() {
+  const old = ls.get('mhc-orders');
+  if (old == null) return;
+  try {
+    const list = JSON.parse(old);
+    if (Array.isArray(list) && list.length) await api('/orders', { method: 'PUT', body: JSON.stringify({ orders: list, savedAt: +(ls.get('mhc-saved-at') || 0) }) });
+    ls.del('mhc-orders'); ls.del('mhc-saved-at');
+  } catch (e) { if (e instanceof SyntaxError) { ls.del('mhc-orders'); ls.del('mhc-saved-at'); } else throw e; }
+}
+
+async function flush() {
+  if (flushing) return;
+  flushing = true;
+  try {
+    for (const key of Object.keys(pending)) {
+      const p = pending[key];
+      if (p.__delete) await api('/jc/orders/' + encodeURIComponent(key), { method: 'DELETE' });
+      else {
+        const { card } = await api('/jc/orders/' + encodeURIComponent(key), { method: 'PUT', body: JSON.stringify(p) });
+        if (pending[key] === p) { const i = orders.findIndex(o => o.key === key); if (i >= 0) orders[i] = card; }
+      }
+      if (pending[key] === p) delete pending[key];
+      ls.setJson('jc-pending', pending);
+    }
+    setStatus('ok', 'saved');
+  } catch (e) {
+    if (e.message !== 'auth') offlineStatus();
+    throw e;
+  } finally { flushing = false; ls.setJson('jc-cache', orders); if (!editing) render(); }
+}
+
+async function sync(loud) {
+  if (loud) setStatus('busy', 'syncing');
+  try {
+    await uploadOldCache();
+    await flush();
+    const data = await api('/jc/orders?t=' + Date.now());
+    // anything not yet saved stays on top of what the server has
+    const byKey = new Map((data.orders || []).map(o => [o.key, o]));
+    for (const [key, p] of Object.entries(pending)) p.__delete ? byKey.delete(key) : byKey.set(key, p);
+    orders = [...byKey.values()];
+    ls.setJson('jc-cache', orders);
+    setStatus('ok', 'upToDate');
+    if (!editing) render();
+  } catch (e) { if (e.message !== 'auth') offlineStatus(); }
+}
+
+function saveCard(card) {
+  card.lastUpdated = Date.now();
+  const i = orders.findIndex(o => o.key === card.key);
+  if (i >= 0) orders[i] = card; else orders.push(card);
+  pending[card.key] = card;
+  ls.setJson('jc-pending', pending); ls.setJson('jc-cache', orders);
+  setStatus('busy', 'saving');
+  render();
+  flush().catch(() => {});
+}
+
+function deleteCard(key) {
+  orders = orders.filter(o => o.key !== key);
+  pending[key] = { __delete: true };
+  ls.setJson('jc-pending', pending); ls.setJson('jc-cache', orders);
+  render();
+  flush().catch(() => {});
+  toast(t('deletedToast'));
+}
+
 // ── Render ────────────────────────────────────────────────────────────
 function matches(o) {
   if (onlyOld && !isOld(o)) return false;
@@ -224,8 +247,8 @@ function matches(o) {
 
 function cardHtml(o) {
   const d = ageOf(o), shipped = !o.draft && colOf(o) >= 3, parts = partsOf(o);
-  return `<article class="card${o.draft ? ' draft' : ''}" draggable="true" tabindex="0" data-id="${esc(o.id)}">
-    <div class="c-top"><span class="c-id">${esc(o.id)}</span>${o.shopifyOrderName ? `<span class="c-shop">${esc(o.shopifyOrderName)}</span>` : ''}
+  return `<article class="card${o.draft ? ' draft' : ''}" draggable="true" tabindex="0" data-key="${esc(o.key)}">
+    <div class="c-top"><span class="c-id">${esc(label(o))}</span>${o.shopifyOrderName ? `<span class="c-shop">${esc(o.shopifyOrderName)}</span>` : ''}
       <span class="c-age ${bCls(d, shipped)}" title="${esc(t('created') + ' ' + fmtDate(o.createdAt || o.lastUpdated))}">${d}${t('days')}</span></div>
     ${o.customerName ? `<div class="c-name">${esc(o.customerName)}</div>` : ''}
     ${parts.length ? `<div class="c-lines">${parts.slice(0, 2).map(p => `<div>${esc(p)}</div>`).join('')}</div>` : ''}
@@ -235,11 +258,13 @@ function cardHtml(o) {
 }
 
 const statLabel = ([lg, sh]) => `<span><i class="lg">${esc(lg)}</i><i class="sh">${esc(sh)}</i></span>`;
+const byNumber = (a, b) => (parseInt((a.id || '').slice(4), 10) || 1e9) - (parseInt((b.id || '').slice(4), 10) || 1e9);
 
 function render() {
   const cols = [{ key: -1, name: t('incoming') }, ...t('stages').map((name, key) => ({ key, name }))];
   const by = new Map(cols.map(c => [c.key, []]));
   orders.filter(matches).forEach(o => by.get(boardCol(o))?.push(o));
+  for (const list of by.values()) list.sort(byNumber);
 
   const oldN = orders.filter(isOld).length;
   $('stats').innerHTML =
@@ -267,11 +292,11 @@ function render() {
 }
 
 // ── Board events ──────────────────────────────────────────────────────
-$('board').addEventListener('click', e => { const c = e.target.closest('.card'); if (c) openModal(c.dataset.id); });
-$('board').addEventListener('keydown', e => { const c = e.target.closest('.card'); if (c && e.key === 'Enter') openModal(c.dataset.id); });
+$('board').addEventListener('click', e => { const c = e.target.closest('.card'); if (c) openModal(c.dataset.key); });
+$('board').addEventListener('keydown', e => { const c = e.target.closest('.card'); if (c && e.key === 'Enter') openModal(c.dataset.key); });
 $('board').addEventListener('dragstart', e => {
   const c = e.target.closest('.card'); if (!c) return;
-  e.dataTransfer.setData('text', c.dataset.id);
+  e.dataTransfer.setData('text/plain', c.dataset.key);
   requestAnimationFrame(() => c.classList.add('dragging'));
 });
 $('board').addEventListener('dragend', e => e.target.closest('.card')?.classList.remove('dragging'));
@@ -283,33 +308,31 @@ $('board').addEventListener('dragleave', e => { const bd = e.target.closest('.co
 $('board').addEventListener('drop', e => {
   const bd = e.target.closest('.col-bd'); if (!bd || bd.dataset.col === '-1') return;
   e.preventDefault(); bd.classList.remove('over');
-  const o = orders.find(x => x.id === e.dataTransfer.getData('text')); if (!o) return;
+  const o = orders.find(x => x.key === e.dataTransfer.getData('text/plain')); if (!o) return;
   const s = +bd.dataset.col;
-  o.draft = false;
-  for (let i = 0; i <= s; i++) o.stages[i] = true;
-  for (let i = s + 1; i < 5; i++) o.stages[i] = false;
-  o.lastUpdated = Date.now(); persist(); render();
+  saveCard({ ...o, draft: false, stages: [0, 1, 2, 3, 4].map(i => i <= s) });
 });
 $('tabs').addEventListener('click', e => { const b = e.target.closest('.tab'); if (b) { tab = +b.dataset.tab; ls.set('mhc-tab', String(tab)); render(); } });
 $('q').addEventListener('input', e => { query = e.target.value.trim().toLowerCase(); render(); });
-$('sync-btn').onclick = () => pullFromWorker(false);
+$('sync-btn').onclick = () => sync(true);
 $('new-btn').onclick = () => openModal(null);
 
 // ── Order editor ──────────────────────────────────────────────────────
 const check = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5L20 7"/></svg>';
 
-function openModal(id) {
-  const o = id ? orders.find(x => x.id === id) : null;
-  if (id && !o) return;
-  cid = id;
-  editing = o ? { ...o, stages: [...o.stages] } : { customerName: '', email: '', phone: '', address: '', partNumbers: '', tracking: '', notes: '',
-    stages: [false, false, false, false, false], createdAt: Date.now() };
+function openModal(key) {
+  const o = key ? orders.find(x => x.key === key) : null;
+  if (key && !o) return;
+  editing = o ? { ...o, stages: [...o.stages], isNew: false }
+    : { key: 'M' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), id: null, draft: false, isNew: true,
+        customerName: '', email: '', phone: '', address: '', partNumbers: '', tracking: '', notes: '',
+        stages: [false, false, false, false, false], createdAt: Date.now() };
   drawDrawer();
   $('scrim').classList.add('open'); $('drawer').classList.add('open');
   setTimeout(() => $('f-name')?.focus(), 50);
 }
 
-function closeModal() { $('scrim').classList.remove('open'); $('drawer').classList.remove('open'); cid = null; editing = null; render(); }
+function closeModal() { $('scrim').classList.remove('open'); $('drawer').classList.remove('open'); editing = null; render(); }
 
 function readForm() {
   if (!editing || !$('f-name')) return;
@@ -337,12 +360,12 @@ function drawDrawer() {
   }).join('');
   const createdTs = o.createdAt || o.lastUpdated || Date.now();
   let meta = '';
-  if (cid) {
+  if (!o.isNew) {
     const cr = o.createdAt ? `${t('created')}: ${fmtDate(o.createdAt)}  ·  ` : '';
     meta = `${cr}${t('lastUpdated')}: ${fmtDate(o.lastUpdated)} (${daysAgo(o.lastUpdated)}${t('dAgo')})`;
   }
   $('drawer').innerHTML = `
-    <div class="d-hd"><div><h3 id="d-title">${esc(cid || t('newOrderTitle'))}</h3>
+    <div class="d-hd"><div><h3 id="d-title">${esc(o.isNew ? t('newOrderTitle') : label(o))}</h3>
       <div class="sub">${o.shopifyOrderName ? 'Shopify ' + esc(o.shopifyOrderName) + ' · ' : ''}${esc(o.draft && !anyStage ? t('incoming') : names[Math.max(cur, 0)])}</div></div>
       <div class="grow"></div><button class="icon-btn" id="d-close" aria-label="${esc(t('close'))}">✕</button></div>
     <div class="d-bd">
@@ -359,7 +382,7 @@ function drawDrawer() {
       <div class="sec"><h4>${esc(t('notes'))}</h4><textarea class="in" id="f-notes" rows="3">${esc(o.notes)}</textarea></div>
       ${meta ? `<div class="meta">${esc(meta)}</div>` : ''}
     </div>
-    <div class="d-ft">${cid ? `<button class="btn btn-text" id="d-del">${esc(t('del'))}</button>` : ''}
+    <div class="d-ft">${o.isNew ? '' : `<button class="btn btn-text" id="d-del">${esc(t('del'))}</button>`}
       <div class="grow"></div><button class="btn btn-ghost" id="d-cancel">${esc(t('cancel'))}</button><button class="btn btn-red" id="d-save">${esc(t('save'))}</button></div>`;
 
   $('d-close').onclick = $('d-cancel').onclick = closeModal;
@@ -370,61 +393,100 @@ function drawDrawer() {
 
 function saveOrder() {
   readForm();
-  const now = Date.now();
-  const fields = {
-    customerName: editing.customerName.trim(),
-    email:        editing.email.trim(),
-    phone:        editing.phone.trim(),
-    address:      editing.address.trim(),
-    partNumbers:  editing.partNumbers.trim(),
-    tracking:     editing.tracking.trim(),
-    notes:        editing.notes,
-    stages:       [...editing.stages],
+  const e = editing, now = Date.now();
+  const card = {
+    ...(orders.find(x => x.key === e.key) || { key: e.key, id: null, draft: false }),
+    customerName: e.customerName.trim(),
+    email:        e.email.trim(),
+    phone:        e.phone.trim(),
+    address:      e.address.trim(),
+    partNumbers:  e.partNumbers.trim(),
+    tracking:     e.tracking.trim(),
+    notes:        e.notes,
+    stages:       [...e.stages],
     lastUpdated:  now,
-    createdAt:    new Date(editing.createdDraft).getTime() || now,
+    createdAt:    new Date(e.createdDraft).getTime() || now,
   };
-  if (cid) {
-    const existing = orders.find(x => x.id === cid);
-    const wasDraft = existing?.draft;
-    Object.assign(existing, fields);
-    if (wasDraft && fields.stages.some(Boolean)) existing.draft = false;
-  } else { orders.push({ id: nextId(), ...fields }); }
-  persist(); closeModal(); toast(t('savedToast'));
+  if (card.draft && card.stages.some(Boolean)) card.draft = false;
+  editing = null;
+  saveCard(card); closeModal(); toast(t('savedToast'));
 }
 
 function delOrder() {
-  if (!cid || !confirm(t('delConfirm')(cid))) return;
-  orders = orders.filter(x => x.id !== cid); persist(); closeModal();
+  if (!editing || !confirm(t('delConfirm')(label(editing)))) return;
+  const key = editing.key; editing = null; closeModal(); deleteCard(key);
 }
 
 $('scrim').onclick = closeModal;
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && editing) closeModal(); });
 
+// ── Recently deleted ──────────────────────────────────────────────────
+async function openBin() {
+  editing = null;
+  $('drawer').innerHTML = `<div class="d-hd"><h3>${esc(t('recentlyDeleted'))}</h3><div class="grow"></div><button class="icon-btn" id="d-close" aria-label="${esc(t('close'))}">✕</button></div>
+    <div class="d-bd" id="bin"><div class="hint" style="margin-top:16px">${esc(t('loading'))}</div></div>`;
+  $('d-close').onclick = closeModal;
+  $('scrim').classList.add('open'); $('drawer').classList.add('open');
+  try {
+    const { orders: list } = await api('/jc/deleted');
+    list.sort((a, b) => b.deletedAt - a.deletedAt);
+    $('bin').innerHTML = list.length ? list.map(o => `<div class="bin-row"><div><b>${esc(label(o))}</b> ${esc(o.customerName || '')}
+      <small>${esc(t('deletedOn'))} ${esc(fmtDate(o.deletedAt))} · ${esc(partsOf(o).join(', '))}</small></div>
+      <button class="btn btn-ghost" data-restore="${esc(o.key)}">${esc(t('restore'))}</button></div>`).join('')
+      : `<div class="hint" style="margin-top:16px">${esc(t('binEmpty'))}</div>`;
+    $('bin').querySelectorAll('[data-restore]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      try { await api('/jc/restore/' + encodeURIComponent(b.dataset.restore), { method: 'POST' }); b.closest('.bin-row').remove(); toast(t('restored')); sync(); }
+      catch { b.disabled = false; toast(t('restoreFail')); }
+    });
+  } catch { $('bin').innerHTML = `<div class="hint" style="margin-top:16px">${esc(t('loadFail'))}</div>`; }
+}
+$('bin-btn').onclick = openBin;
+
 let toastTimer;
 function toast(msg) { const el = $('toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2400); }
 
+function logout() { pin = ''; ls.del('mhc-pin'); $('pin').classList.remove('hidden'); $('pin-in').value = ''; $('pin-in').focus(); }
+
 // ── Start ─────────────────────────────────────────────────────────────
+let started = false;
+function start() {
+  $('pin').classList.add('hidden');
+  render();
+  sync(true);
+  if (started) return;
+  started = true;
+  setInterval(() => { if (document.visibilityState === 'visible' && !editing) sync(); }, 45000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !editing) sync(); });
+  window.addEventListener('online', () => sync(true));
+}
+
 applyLang();
 (function initPin() {
   const input = $('pin-in'), err = $('pin-err');
-  if (pin) {
-    verifyPin(pin).then(res => {
-      if (res === 'ok' || res === 'offline') { startBoard(); return; }
-      if (res === 'wrong') { pin = ''; ls.del('mhc-pin'); }   // PIN was changed: ask again
-      input.focus();
-    });
-  } else input.focus();
+  async function attempt(p) {
+    try {
+      const r = await fetch(API + '/jc/orders?t=' + Date.now(), { headers: { 'X-PIN': p } });
+      if (r.ok) { pin = p; ls.set('mhc-pin', p); start(); return 'ok'; }
+      if (r.status === 429) {
+        const b = await r.json().catch(() => ({}));
+        err.textContent = b.error === 'blocked' ? t('pinBlocked') : t('pinLocked');
+        input.disabled = true; return 'locked';
+      }
+      err.textContent = t('pinWrong'); return 'wrong';
+    } catch { err.textContent = t('pinOffline'); return 'offline'; }
+  }
   input.addEventListener('input', async () => {
     err.textContent = '';
     input.value = input.value.replace(/\D/g, '');
-    if (input.value.length < 6) return;
-    const candidate = input.value.trim();
-    const res = await verifyPin(candidate);
-    if (res === 'ok') { pin = candidate; ls.set('mhc-pin', pin); startBoard(); }
-    else if (res === 'locked') { err.textContent = t('pinLocked'); input.disabled = true; }
-    else if (res === 'blocked') { err.textContent = t('pinBlocked'); input.disabled = true; }
-    else { err.textContent = t('pinWrong'); input.value = ''; input.focus(); }
+    if (input.value.length === 6 && (await attempt(input.value)) !== 'ok') { input.value = ''; input.focus(); }
   });
+  if (pin) attempt(pin).then(res => {
+    if (res === 'wrong') { ls.del('mhc-pin'); pin = ''; }   // PIN was changed: ask again
+    if (res === 'offline') { start(); return; }             // keep working from the saved copy
+    input.focus();
+  });
+  else input.focus();
 })();
 </script>
 </body>

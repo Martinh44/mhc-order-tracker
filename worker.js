@@ -1,6 +1,7 @@
 // MHC Order Tracker — Cloudflare Worker
 // Required environment variables (set in Cloudflare dashboard):
 //   MHC_PIN                — the shared 6-digit PIN code (Secret)
+//   MHC_PIN also opens the JC board (/jc/*, and the old /orders); PT_PIN opens the PakTechz board (/pt/*) (Secret)
 //   NTFY_TOPIC             — your private ntfy topic name (Secret)
 //   SHOPIFY_WEBHOOK_SECRET — webhook signing secret from Shopify (Secret)
 //   SHOPIFY_CLIENT_ID      — Shopify app client ID, for barcode lookups (Secret)
@@ -10,11 +11,13 @@
 // Required KV binding:
 //   MHC_KV     — KV namespace named MHC_ORDERS
 
+import { handleCheckoutWebhook, markOrdered, handleUnsub, handleAdmin, handleHealth, runRecovery } from './recovery.js';
+import { handleBoard, handleLegacyJc, addJcOrder, addPaktechzOrder } from './boards.js';
+
 const LOCKOUT_AFTER  = 10;   // wrong attempts before 15-min lockout
 const BLOCK_AFTER    = 50;   // wrong attempts total before permanent block
 const LOCKOUT_TTL    = 900;  // 15 minutes in seconds
 
-const SHOPIFY_VENDORS = ['mhjc', 'vanté automotive', 'vante automotive'];
 const SHOPIFY_SHOP    = 'ujyuxq-uh.myshopify.com';
 const SHOPIFY_API     = '2026-07';
 
@@ -29,12 +32,13 @@ export default {
   // Cron trigger (Cloudflare dashboard → Settings → Triggers → Cron: */10 * * * *)
   async scheduled(event, env, ctx) {
     ctx.waitUntil(runCarbonJobs(env));
+    ctx.waitUntil(runRecovery(env, shopifyGql).catch(() => {}));   // abandoned-checkout emails (recovery.js)
   },
 
   async fetch(request, env) {
     const cors = {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, PUT, POST, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, PUT, POST, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, X-PIN',
     };
 
@@ -46,6 +50,20 @@ export default {
     const url = new URL(request.url);
     if (request.method === 'POST' && url.pathname === '/webhook/shopify') {
       return handleShopifyWebhook(request, env, cors);
+    }
+
+    // Abandoned-checkout recovery (recovery.js): checkout webhooks, opt-out link, admin
+    if (request.method === 'POST' && url.pathname === '/webhook/checkout') {
+      return handleCheckoutWebhook(request, env, cors);
+    }
+    if (request.method === 'GET' && url.pathname === '/r/unsub') {
+      return handleUnsub(url, env);
+    }
+    if (request.method === 'GET' && url.pathname === '/r/health') {
+      return handleHealth(env);
+    }
+    if (url.pathname.startsWith('/r/')) {
+      return handleAdmin(request, url, env, shopifyGql);
     }
 
     const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
@@ -73,7 +91,9 @@ export default {
 
     // 3 — Validate PIN
     const pin = request.headers.get('X-PIN') || '';
-    if (!env.MHC_PIN || pin !== env.MHC_PIN) {
+    const isPt = url.pathname.startsWith('/pt/');
+    const expectedPin = isPt ? env.PT_PIN : env.MHC_PIN;
+    if (!expectedPin || pin !== expectedPin) {
       const attemptsRaw = await env.MHC_KV.get(attemptsKey);
       const attempts = attemptsRaw ? parseInt(attemptsRaw, 10) : 0;
       const newAttempts = attempts + 1;
@@ -107,26 +127,10 @@ export default {
       env.MHC_KV.delete(lockoutKey),
     ]);
 
-    if (request.method === 'GET' && url.pathname === '/orders') {
-      const data = await env.MHC_KV.get('orders');
-      return new Response(data || '{"orders":[],"savedAt":0}', {
-        headers: { ...cors, 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (request.method === 'PUT' && url.pathname === '/orders') {
-      const body = await request.text();
-      try { JSON.parse(body); } catch {
-        return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
-          status: 400,
-          headers: { ...cors, 'Content-Type': 'application/json' },
-        });
-      }
-      await env.MHC_KV.put('orders', body);
-      return new Response(JSON.stringify({ ok: true }), {
-        headers: { ...cors, 'Content-Type': 'application/json' },
-      });
-    }
+    // Order boards (boards.js): per-card storage
+    if (isPt) return handleBoard('pt', request, url, env, cors);
+    if (url.pathname.startsWith('/jc/')) return handleBoard('jc', request, url, env, cors);
+    if ((request.method === 'GET' || request.method === 'PUT') && url.pathname === '/orders') return handleLegacyJc(request, env, cors);
 
     return new Response('Not found', { status: 404, headers: cors });
   },
@@ -157,74 +161,19 @@ async function handleShopifyWebhook(request, env, cors) {
 
   const order = JSON.parse(rawBody);
 
-  // Only process line items from MHJC / Vanté Automotive
-  const qualifying = (order.line_items || []).filter(
-    item => SHOPIFY_VENDORS.includes((item.vendor || '').toLowerCase().trim())
-  );
-  if (!qualifying.length) {
-    return new Response(JSON.stringify({ ok: true, skipped: true }), {
-      headers: { ...cors, 'Content-Type': 'application/json' },
-    });
+  // Any order stops checkout-recovery emails for that checkout and customer
+  try { await markOrdered(env, order); } catch {}
+
+  // MHJC / Vanté Automotive lines → JC board, MHPT lines → PakTechz board (boards.js).
+  // If either write fails, answer 500 so Shopify retries; both boards ignore an order they already have.
+  const results = {};
+  let failed = false;
+  for (const [name, add] of [['jc', addJcOrder], ['pt', addPaktechzOrder]]) {
+    try { results[name] = await add(env, order, fetchBarcodes); }
+    catch (e) { failed = true; console.log(name + ' board webhook', String(e)); }
   }
-
-  // Read current orders from KV
-  const stored = await env.MHC_KV.get('orders');
-  const data = stored ? JSON.parse(stored) : { orders: [], savedAt: 0 };
-  const orders = Array.isArray(data) ? data : (data.orders || []);
-
-  // Deduplicate — Shopify can fire the same webhook more than once
-  const shopifyId = String(order.id);
-  if (orders.some(o => o.shopifyOrderId === shopifyId)) {
-    return new Response(JSON.stringify({ ok: true, duplicate: true }), {
-      headers: { ...cors, 'Content-Type': 'application/json' },
-    });
-  }
-
-  // Build address
-  const addr = order.shipping_address || order.billing_address || {};
-  const addressParts = [
-    addr.address1, addr.address2,
-    addr.city, addr.province_code || addr.province,
-    addr.zip, addr.country,
-  ].filter(Boolean);
-
-  // Order webhooks don't include barcodes, so look them up per variant; fall back to SKU then name
-  const barcodes = await fetchBarcodes(env, qualifying.map(i => i.variant_id));
-  const skus = qualifying
-    .map(i => barcodes[i.variant_id] || i.sku || i.name)
-    .filter(Boolean).join('\n');
-
-  // Generate next MHC-XXX ID
-  const maxNum = orders.length
-    ? Math.max(...orders.map(o => parseInt(o.id.slice(4), 10) || 0))
-    : 0;
-  const newId = 'MHC-' + String(maxNum + 1).padStart(3, '0');
-
-  const now = Date.now();
-  const card = {
-    id: newId,
-    draft: true,
-    shopifyOrderId: shopifyId,
-    shopifyOrderName: order.name || '',
-    customerName: [
-      addr.first_name || order.customer?.first_name,
-      addr.last_name  || order.customer?.last_name,
-    ].filter(Boolean).join(' '),
-    email:        order.email || order.customer?.email || '',
-    phone:        order.phone || addr.phone || order.customer?.phone || '',
-    address:      addressParts.join(', '),
-    partNumbers:  skus,
-    tracking:     '',
-    notes:        '',
-    stages:       [false, false, false, false, false],
-    createdAt:    new Date(order.created_at || now).getTime(),
-    lastUpdated:  now,
-  };
-
-  orders.push(card);
-  await env.MHC_KV.put('orders', JSON.stringify({ orders, savedAt: now }));
-
-  return new Response(JSON.stringify({ ok: true, id: newId }), {
+  if (failed) return new Response('Board write failed', { status: 500, headers: cors });
+  return new Response(JSON.stringify({ ok: true, ...results }), {
     headers: { ...cors, 'Content-Type': 'application/json' },
   });
 }
