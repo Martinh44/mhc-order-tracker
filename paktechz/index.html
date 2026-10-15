@@ -60,15 +60,14 @@ const T = {
     search: '搜索客户、零件、订单…', refresh: '刷新', newOrder: '新订单', new: '新',
     connecting: '连接中…', saved: '已保存', upToDate: '已同步', syncing: '同步中…', saving: '保存中…', offline: '离线',
     unsaved: n => `离线 · ${n} 项未保存`,
-    incoming: '待处理', stages: ['下单', '已付款', '生产中', '已发货', '已签收'],
-    stIncoming: ['待处理', '待处理'], stOpen: ['进行中订单', '进行中'], stProd: ['生产中', '生产中'], stLate: [`逾期（超过${LATE_DAYS}天）`, '逾期'], lateFilter: '只看逾期订单',
-    emptyIncoming: 'Shopify 的 PakTechz 订单会自动出现在这里', empty: '暂无订单',
+    stages: ['下单', '已付款', '生产中', '已发货', '已签收'],
+    stShipped: ['已发货', '已发货'], stOpen: ['进行中订单', '进行中'], stProd: ['生产中', '生产中'], stLate: [`逾期（超过${LATE_DAYS}天）`, '逾期'], lateFilter: '只看逾期订单',
+    empty: '暂无订单',
     noFinish: '未选表面', morePart: n => `另有 ${n} 个零件`, tracking: '物流单号', days: '天',
     prodDay: d => `生产第 ${d} / ${LATE_DAYS} 天`, daysLeft: n => `剩余 ${n} 天`, lateOver: n => `逾期 ${n} 天`, lateDay: d => `逾期 · 第 ${d} 天`,
     dayOf: d => `第 ${d} / ${LATE_DAYS} 天`, late: '逾期', created: '创建于',
     parts: '零件', progress: '进度', customer: '客户信息', order: '订单信息', notes: '备注',
     partPH: '零件编号，例如 PT0047-3', chooseFinish: '选择表面…', qty: '数量', removePart: '删除零件', addPart: '+ 添加零件',
-    draftHint: '来自 Shopify 的新订单，选择一个阶段开始处理。',
     name: '姓名', email: '邮箱', phone: '电话', address: '收货地址', trackingNo: '物流单号', orderDate: '订单日期',
     lastUpdated: '最后更新', del: '删除', cancel: '取消', save: '保存', close: '关闭',
     delConfirm: id => `确认删除 ${id}？90天内可以恢复。`, deletedToast: '订单已删除，可在“最近删除”中恢复',
@@ -82,15 +81,14 @@ const T = {
     search: 'Search customer, part, order…', refresh: 'Refresh', newOrder: 'New order', new: 'New',
     connecting: 'Connecting…', saved: 'Saved', upToDate: 'Up to date', syncing: 'Syncing…', saving: 'Saving…', offline: 'Offline',
     unsaved: n => `Offline · ${n} unsaved`,
-    incoming: 'Incoming', stages: ['Order Raised', 'Invoice Paid', 'In Production', 'Shipped', 'Delivered'],
-    stIncoming: ['Incoming', 'Incoming'], stOpen: ['Open orders', 'Open'], stProd: ['In production', 'In prod'], stLate: [`Late (over ${LATE_DAYS} days)`, 'Late'], lateFilter: 'Show only late orders',
-    emptyIncoming: 'Shopify orders for PakTechz parts land here', empty: 'No orders',
+    stages: ['Order Raised', 'Invoice Paid', 'In Production', 'Shipped', 'Delivered'],
+    stShipped: ['Shipped', 'Shipped'], stOpen: ['Open orders', 'Open'], stProd: ['In production', 'In prod'], stLate: [`Late (over ${LATE_DAYS} days)`, 'Late'], lateFilter: 'Show only late orders',
+    empty: 'No orders',
     noFinish: 'No finish', morePart: n => `+ ${n} more part${n > 1 ? 's' : ''}`, tracking: 'Tracking', days: 'd',
     prodDay: d => `Production day ${d} of ${LATE_DAYS}`, daysLeft: n => `${n} days left`, lateOver: n => `LATE · ${n}d over`, lateDay: d => `LATE · day ${d}`,
     dayOf: d => `day ${d} of ${LATE_DAYS}`, late: 'Late', created: 'Created',
     parts: 'Parts', progress: 'Progress', customer: 'Customer', order: 'Order', notes: 'Notes',
     partPH: 'Part number, e.g. PT0047-3', chooseFinish: 'Choose finish…', qty: 'Quantity', removePart: 'Remove part', addPart: '+ Add part',
-    draftHint: 'New from Shopify. Choose a stage to move it onto the board.',
     name: 'Name', email: 'Email', phone: 'Phone', address: 'Shipping address', trackingNo: 'Tracking number', orderDate: 'Order date',
     lastUpdated: 'Last updated', del: 'Delete', cancel: 'Cancel', save: 'Save', close: 'Close',
     delConfirm: id => `Delete ${id}? You can restore it for 90 days.`, deletedToast: 'Order deleted · restore it from Recently deleted',
@@ -111,7 +109,7 @@ let lang = store.get('pt-lang', 'zh');
 let pin = store.get('pt-pin', '');
 let orders = store.get('pt-cache', []);
 let pending = store.get('pt-pending', {});      // id -> card | {__delete:true}; survives reloads while offline
-let tab = store.get('pt-tab', 1);
+let tab = Math.max(0, +store.get('pt-tab', 0) || 0);
 let query = '', onlyLate = false, editing = null, flushing = false, statusKey = ['', 'connecting'];
 
 const t = k => T[lang][k];
@@ -141,7 +139,6 @@ $('lang-btn').onclick = () => {
 };
 
 function colOf(o) {
-  if (o.draft) return -1;
   let s = 0; (o.stages || []).forEach((v, i) => { if (v) s = i; });
   return s;
 }
@@ -264,7 +261,7 @@ function cardHtml(o) {
 const statLabel = ([lg, sh]) => `<span><i class="lg">${esc(lg)}</i><i class="sh">${esc(sh)}</i></span>`;
 
 function render() {
-  const cols = [{ key: -1, name: t('incoming') }, ...t('stages').map((name, key) => ({ key, name }))];
+  const cols = t('stages').map((name, key) => ({ key, name }));
   const vis = orders.filter(matches);
   const by = new Map(cols.map(c => [c.key, []]));
   vis.forEach(o => by.get(colOf(o))?.push(o));
@@ -272,9 +269,9 @@ function render() {
 
   const lateN = orders.filter(isLate).length;
   $('stats').innerHTML =
-    `<div class="stat">${statLabel(t('stIncoming'))}<b>${orders.filter(o => o.draft).length}</b></div>
-     <div class="stat">${statLabel(t('stOpen'))}<b>${orders.filter(o => !o.draft && colOf(o) < 4).length}</b></div>
+    `<div class="stat">${statLabel(t('stOpen'))}<b>${orders.filter(o => colOf(o) < 4).length}</b></div>
      <div class="stat">${statLabel(t('stProd'))}<b>${orders.filter(o => colOf(o) === PROD).length}</b></div>
+     <div class="stat">${statLabel(t('stShipped'))}<b>${orders.filter(o => colOf(o) === 3).length}</b></div>
      <button class="stat${lateN ? ' late' : ''}${onlyLate ? ' active' : ''}" id="late-filter" title="${esc(t('lateFilter'))}">${statLabel(t('stLate'))}<b>${lateN}</b></button>`;
   $('late-filter').onclick = () => { onlyLate = !onlyLate; if (onlyLate) tab = PROD; render(); };
 
@@ -286,8 +283,8 @@ function render() {
 
   $('board').innerHTML = cols.map(c => {
     const list = by.get(c.key);
-    const cls = c.key === -1 ? ' incoming' : c.key === PROD ? ' prod' : '';
-    const empty = c.key === -1 ? t('emptyIncoming') : t('empty');
+    const cls = c.key === PROD ? ' prod' : '';
+    const empty = t('empty');
     return `<section class="col${cls}${tab === c.key ? ' show' : ''}">
       <div class="col-hd"><span class="pip"></span><h2>${esc(c.name)}</h2><span class="n">${list.length}</span></div>
       <div class="col-bd" data-col="${c.key}">${list.length ? list.map(cardHtml).join('') : `<div class="empty">${esc(empty)}</div>`}</div>
@@ -305,12 +302,12 @@ $('board').addEventListener('dragstart', e => {
 });
 $('board').addEventListener('dragend', e => e.target.closest('.card')?.classList.remove('dragging'));
 $('board').addEventListener('dragover', e => {
-  const bd = e.target.closest('.col-bd'); if (!bd || bd.dataset.col === '-1') return;
+  const bd = e.target.closest('.col-bd'); if (!bd) return;
   e.preventDefault(); document.querySelectorAll('.col-bd.over').forEach(x => x !== bd && x.classList.remove('over')); bd.classList.add('over');
 });
 $('board').addEventListener('dragleave', e => { const bd = e.target.closest('.col-bd'); if (bd && !bd.contains(e.relatedTarget)) bd.classList.remove('over'); });
 $('board').addEventListener('drop', e => {
-  const bd = e.target.closest('.col-bd'); if (!bd || bd.dataset.col === '-1') return;
+  const bd = e.target.closest('.col-bd'); if (!bd) return;
   e.preventDefault(); bd.classList.remove('over');
   const o = orders.find(x => x.id === e.dataTransfer.getData('text/plain'));
   const s = +bd.dataset.col;
@@ -362,7 +359,7 @@ function readForm() {
 function drawDrawer() {
   const o = editing, cur = colOf(o), late = isLate(o), pd = prodDays(o), names = t('stages');
   const steps = names.map((name, i) => {
-    const done = !o.draft && o.stages[i], isCur = !o.draft && i === cur;
+    const done = o.stages[i], isCur = i === cur;
     const extra = i === PROD && pd != null ? (late ? `<span class="late-pill">${esc(t('lateDay')(pd))}</span>` : `<span class="hint">${esc(t('dayOf')(pd))}</span>`) : '';
     return `<div class="step${done ? ' done' : ''}${isCur ? ' cur' : ''}">
       <span class="c">${done ? check : ''}</span>
@@ -382,11 +379,11 @@ function drawDrawer() {
 
   $('drawer').innerHTML = `
     <div class="d-hd"><div><h3 id="d-title">${esc(o.isNew ? t('newOrder') : label(o))}</h3>
-      <div class="sub">${o.shopifyOrderName ? 'Shopify ' + esc(o.shopifyOrderName) + ' · ' : ''}${esc(o.draft ? t('incoming') : names[cur])}${late ? ` · <b style="color:var(--red)">${esc(t('late'))}</b>` : ''}</div></div>
+      <div class="sub">${o.shopifyOrderName ? 'Shopify ' + esc(o.shopifyOrderName) + ' · ' : ''}${esc(names[cur])}${late ? ` · <b style="color:var(--red)">${esc(t('late'))}</b>` : ''}</div></div>
       <div class="grow"></div><button class="icon-btn" id="d-close" aria-label="${esc(t('close'))}">✕</button></div>
     <div class="d-bd">
       <div class="sec"><h4>${esc(t('parts'))}</h4><div class="items">${items}</div><button class="add" id="add-item">${esc(t('addPart'))}</button></div>
-      <div class="sec"><h4>${esc(t('progress'))}</h4>${o.draft ? `<div class="hint" style="margin-bottom:8px">${esc(t('draftHint'))}</div>` : ''}<div class="steps">${steps}</div></div>
+      <div class="sec"><h4>${esc(t('progress'))}</h4><div class="steps">${steps}</div></div>
       <div class="sec"><h4>${esc(t('customer'))}</h4><div class="grid">
         <label class="f"><span>${esc(t('name'))}</span><input class="in" id="f-name" value="${esc(o.customerName)}"></label>
         <div class="grid g2"><label class="f"><span>${esc(t('email'))}</span><input class="in" id="f-email" type="email" value="${esc(o.email)}"></label>

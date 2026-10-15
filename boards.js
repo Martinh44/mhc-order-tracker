@@ -1,7 +1,8 @@
 // ── Order boards: JC Sportline (/jc/*) and PakTechz (/pt/*) ───────────
 // Every card is its own KV key (<board>:card:<key>), so a save, a delete or an incoming Shopify order can never
 // overwrite another card. Deleted cards move to <board>:deleted:<key> for 90 days and can be restored.
-// Shopify orders arrive through /webhook/shopify: MHJC + Vanté Automotive lines → JC, MHPT lines → PakTechz.
+// Shopify orders arrive through /webhook/shopify (MHJC + Vanté Automotive lines → JC, MHPT lines → PakTechz)
+// and start in Order Raised.
 //
 // JC history: until 2026-10-15 the JC board was one blob under KV key `orders`. That blob is never written again and
 // stays as the backup; on first use each blob card is copied to jc:card:<its MHC id>. The old page's GET/PUT /orders
@@ -225,15 +226,15 @@ export async function addPaktechzOrder(env, order, fetchBarcodes) {
   if (await env.MHC_KV.get(b.card + key)) return 'duplicate';
   if (await env.MHC_KV.get(b.bin + key)) return 'deleted';   // removed on purpose: don't bring it back
   const barcodes = await fetchBarcodes(env, lines.map(i => i.variant_id));
-  const now = Date.now();
+  const now = Date.now(), created = new Date(order.created_at || now).getTime();
   const card = {
-    id: key, num: nextPtNum(await listPrefix(env, b.card)), draft: true, ...customerFields(order),
+    id: key, num: nextPtNum(await listPrefix(env, b.card)), draft: false, ...customerFields(order),
     items: lines.map(i => ({
       part: basePart(barcodes[i.variant_id] || i.sku || ''), finish: finishFromVariant(i.variant_title),
       qty: i.quantity || 1, title: i.title || i.name || '',
     })),
-    tracking: '', notes: '', stages: [false, false, false, false, false], stageAt: [null, null, null, null, null],
-    createdAt: new Date(order.created_at || now).getTime(), lastUpdated: now,
+    tracking: '', notes: '', stages: [true, false, false, false, false], stageAt: [created, null, null, null, null],
+    createdAt: created, lastUpdated: now,
   };
   await env.MHC_KV.put(b.card + key, JSON.stringify(card));
   return card.id;
@@ -252,9 +253,9 @@ export async function addJcOrder(env, order, fetchBarcodes) {
   const barcodes = await fetchBarcodes(env, lines.map(i => i.variant_id));
   const now = Date.now();
   const card = {
-    key, id: nextJcId([...cards, ...binned]), draft: true, ...customerFields(order),
+    key, id: nextJcId([...cards, ...binned]), draft: false, ...customerFields(order),
     partNumbers: lines.map(i => barcodes[i.variant_id] || i.sku || i.name).filter(Boolean).join('\n'),
-    tracking: '', notes: '', stages: [false, false, false, false, false],
+    tracking: '', notes: '', stages: [true, false, false, false, false],
     createdAt: new Date(order.created_at || now).getTime(), lastUpdated: now,
   };
   await env.MHC_KV.put(b.card + key, JSON.stringify(card));

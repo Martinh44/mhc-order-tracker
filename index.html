@@ -61,14 +61,13 @@ const T = {
     search: '搜索客户、零件、订单…', refresh: '从云端同步', newOrder: '新订单', new: '新',
     connecting: '连接中…', saved: '已保存', upToDate: '已同步', syncing: '同步中…', saving: '保存中…', offline: '离线',
     unsaved: n => `离线 · ${n} 项未保存`,
-    incoming: '待处理', stages: ['下单', '已付款', '生产中', '已发货', '已签收'],
-    stIncoming: ['待处理', '待处理'], stOpen: ['进行中订单', '进行中'], stProd: ['生产中', '生产中'], stOld: ['超过30天未发货', '30天+'], oldFilter: '只看超过30天未发货的订单',
-    emptyIncoming: 'Shopify 的 JC 订单会自动出现在这里', empty: '暂无订单',
+    stages: ['下单', '已付款', '生产中', '已发货', '已签收'],
+    stShipped: ['已发货', '已发货'], stOpen: ['进行中订单', '进行中'], stProd: ['生产中', '生产中'], stOld: ['超过30天未发货', '30天+'], oldFilter: '只看超过30天未发货的订单',
+    empty: '暂无订单',
     moreParts: n => `另有 ${n} 个零件`, tracking: '物流单号', days: '天',
     customer: '客户信息', order: '订单信息', progress: '进度', notes: '备注',
     name: '客户姓名', email: '邮箱', phone: '电话', address: '地址',
     partNumbers: '零件编号（每行一个）', trackingNo: '物流单号', createdDate: '创建日期',
-    draftHint: '来自 Shopify 的新订单，选择一个阶段开始处理。',
     created: '创建', lastUpdated: '最后更新', dAgo: '天前',
     save: '保存', del: '删除', cancel: '取消', close: '关闭', savedToast: '已保存',
     delConfirm: id => `确认删除 ${id}？90天内可以恢复。`, deletedToast: '订单已删除，可在“最近删除”中恢复', newOrderTitle: '新订单',
@@ -81,14 +80,13 @@ const T = {
     search: 'Search customer, part, order…', refresh: 'Pull latest from cloud', newOrder: 'New order', new: 'New',
     connecting: 'Connecting…', saved: 'Saved', upToDate: 'Up to date', syncing: 'Syncing…', saving: 'Saving…', offline: 'Offline',
     unsaved: n => `Offline · ${n} unsaved`,
-    incoming: 'Incoming', stages: ['Order Raised', 'Invoice Paid', 'In Production', 'Shipped', 'Delivered'],
-    stIncoming: ['Incoming', 'Incoming'], stOpen: ['Open orders', 'Open'], stProd: ['In production', 'In prod'], stOld: ['30+ days, not shipped', '30d+'], oldFilter: 'Show only orders 30+ days old and not shipped',
-    emptyIncoming: 'Shopify orders for JC parts land here', empty: 'No orders',
+    stages: ['Order Raised', 'Invoice Paid', 'In Production', 'Shipped', 'Delivered'],
+    stShipped: ['Shipped', 'Shipped'], stOpen: ['Open orders', 'Open'], stProd: ['In production', 'In prod'], stOld: ['30+ days, not shipped', '30d+'], oldFilter: 'Show only orders 30+ days old and not shipped',
+    empty: 'No orders',
     moreParts: n => `+ ${n} more part${n > 1 ? 's' : ''}`, tracking: 'Tracking', days: 'd',
     customer: 'Customer', order: 'Order', progress: 'Progress', notes: 'Notes',
     name: 'Customer name', email: 'Email', phone: 'Phone', address: 'Address',
     partNumbers: 'Part numbers (one per line)', trackingNo: 'Tracking number', createdDate: 'Created date',
-    draftHint: 'New from Shopify. Choose a stage to move it onto the board.',
     created: 'Created', lastUpdated: 'Last updated', dAgo: 'd ago',
     save: 'Save', del: 'Delete', cancel: 'Cancel', close: 'Close', savedToast: 'Saved',
     delConfirm: id => `Delete ${id}? You can restore it for 90 days.`, deletedToast: 'Order deleted · restore it from Recently deleted', newOrderTitle: 'New order',
@@ -109,7 +107,7 @@ let lang = ls.get('mhc-lang') || 'zh';
 let pin = ls.get('mhc-pin') || '';
 let orders = ls.json('jc-cache', []);
 let pending = ls.json('jc-pending', {});        // key -> card | {__delete:true}; survives reloads while offline
-let tab = +(ls.get('mhc-tab') ?? 0), query = '', onlyOld = false, editing = null, flushing = false, statusKey = ['', 'connecting'];
+let tab = Math.max(0, +(ls.get('mhc-tab') ?? 0) || 0), query = '', onlyOld = false, editing = null, flushing = false, statusKey = ['', 'connecting'];
 
 const t = k => T[lang][k];
 const $ = id => document.getElementById(id);
@@ -134,7 +132,6 @@ $('lang-btn').onclick = () => {
 
 // ── Helpers (JC rules unchanged) ──────────────────────────────────────
 function colOf(o) { let s = 0; for (let i = 0; i < 5; i++) if (o.stages[i]) s = i; return s; }
-function boardCol(o) { return o.draft ? -1 : colOf(o); }
 function daysAgo(ts) {
   const a = new Date(ts), b = new Date();
   const aMid = new Date(a.getFullYear(), a.getMonth(), a.getDate());
@@ -143,7 +140,7 @@ function daysAgo(ts) {
 }
 function bCls(d, shipped) { return shipped ? 'g' : d < 20 ? 'g' : d < 30 ? 'am' : 'rd'; }
 function ageOf(o) { return daysAgo(o.createdAt || o.lastUpdated); }
-function isOld(o) { return !o.draft && colOf(o) < 3 && bCls(ageOf(o), false) === 'rd'; }
+function isOld(o) { return colOf(o) < 3 && bCls(ageOf(o), false) === 'rd'; }
 function fmtDate(ts) {
   const d = new Date(ts);
   return lang === 'zh' ? `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`
@@ -246,7 +243,7 @@ function matches(o) {
 }
 
 function cardHtml(o) {
-  const d = ageOf(o), shipped = !o.draft && colOf(o) >= 3, parts = partsOf(o);
+  const d = ageOf(o), shipped = colOf(o) >= 3, parts = partsOf(o);
   return `<article class="card${o.draft ? ' draft' : ''}" draggable="true" tabindex="0" data-key="${esc(o.key)}">
     <div class="c-top"><span class="c-id">${esc(label(o))}</span>${o.shopifyOrderName ? `<span class="c-shop">${esc(o.shopifyOrderName)}</span>` : ''}
       <span class="c-age ${bCls(d, shipped)}" title="${esc(t('created') + ' ' + fmtDate(o.createdAt || o.lastUpdated))}">${d}${t('days')}</span></div>
@@ -261,16 +258,16 @@ const statLabel = ([lg, sh]) => `<span><i class="lg">${esc(lg)}</i><i class="sh"
 const byNumber = (a, b) => (parseInt((a.id || '').slice(4), 10) || 1e9) - (parseInt((b.id || '').slice(4), 10) || 1e9);
 
 function render() {
-  const cols = [{ key: -1, name: t('incoming') }, ...t('stages').map((name, key) => ({ key, name }))];
+  const cols = t('stages').map((name, key) => ({ key, name }));
   const by = new Map(cols.map(c => [c.key, []]));
-  orders.filter(matches).forEach(o => by.get(boardCol(o))?.push(o));
+  orders.filter(matches).forEach(o => by.get(colOf(o))?.push(o));
   for (const list of by.values()) list.sort(byNumber);
 
   const oldN = orders.filter(isOld).length;
   $('stats').innerHTML =
-    `<div class="stat">${statLabel(t('stIncoming'))}<b>${orders.filter(o => o.draft).length}</b></div>
-     <div class="stat">${statLabel(t('stOpen'))}<b>${orders.filter(o => !o.draft && colOf(o) < 4).length}</b></div>
-     <div class="stat">${statLabel(t('stProd'))}<b>${orders.filter(o => !o.draft && colOf(o) === PROD).length}</b></div>
+    `<div class="stat">${statLabel(t('stOpen'))}<b>${orders.filter(o => colOf(o) < 4).length}</b></div>
+     <div class="stat">${statLabel(t('stProd'))}<b>${orders.filter(o => colOf(o) === PROD).length}</b></div>
+     <div class="stat">${statLabel(t('stShipped'))}<b>${orders.filter(o => colOf(o) === 3).length}</b></div>
      <button class="stat${oldN ? ' late' : ''}${onlyOld ? ' active' : ''}" id="old-filter" title="${esc(t('oldFilter'))}">${statLabel(t('stOld'))}<b>${oldN}</b></button>`;
   $('old-filter').onclick = () => { onlyOld = !onlyOld; render(); };
 
@@ -282,8 +279,8 @@ function render() {
 
   $('board').innerHTML = cols.map(c => {
     const list = by.get(c.key);
-    const cls = c.key === -1 ? ' incoming' : c.key === PROD ? ' prod' : '';
-    const empty = c.key === -1 ? t('emptyIncoming') : t('empty');
+    const cls = c.key === PROD ? ' prod' : '';
+    const empty = t('empty');
     return `<section class="col${cls}${tab === c.key ? ' show' : ''}">
       <div class="col-hd"><span class="pip"></span><h2>${esc(c.name)}</h2><span class="n">${list.length}</span></div>
       <div class="col-bd" data-col="${c.key}">${list.length ? list.map(cardHtml).join('') : `<div class="empty">${esc(empty)}</div>`}</div>
@@ -301,12 +298,12 @@ $('board').addEventListener('dragstart', e => {
 });
 $('board').addEventListener('dragend', e => e.target.closest('.card')?.classList.remove('dragging'));
 $('board').addEventListener('dragover', e => {
-  const bd = e.target.closest('.col-bd'); if (!bd || bd.dataset.col === '-1') return;
+  const bd = e.target.closest('.col-bd'); if (!bd) return;
   e.preventDefault(); document.querySelectorAll('.col-bd.over').forEach(x => x !== bd && x.classList.remove('over')); bd.classList.add('over');
 });
 $('board').addEventListener('dragleave', e => { const bd = e.target.closest('.col-bd'); if (bd && !bd.contains(e.relatedTarget)) bd.classList.remove('over'); });
 $('board').addEventListener('drop', e => {
-  const bd = e.target.closest('.col-bd'); if (!bd || bd.dataset.col === '-1') return;
+  const bd = e.target.closest('.col-bd'); if (!bd) return;
   e.preventDefault(); bd.classList.remove('over');
   const o = orders.find(x => x.key === e.dataTransfer.getData('text/plain')); if (!o) return;
   const s = +bd.dataset.col;
@@ -366,7 +363,7 @@ function drawDrawer() {
   }
   $('drawer').innerHTML = `
     <div class="d-hd"><div><h3 id="d-title">${esc(o.isNew ? t('newOrderTitle') : label(o))}</h3>
-      <div class="sub">${o.shopifyOrderName ? 'Shopify ' + esc(o.shopifyOrderName) + ' · ' : ''}${esc(o.draft && !anyStage ? t('incoming') : names[Math.max(cur, 0)])}</div></div>
+      <div class="sub">${o.shopifyOrderName ? 'Shopify ' + esc(o.shopifyOrderName) + ' · ' : ''}${esc(names[Math.max(cur, 0)])}</div></div>
       <div class="grow"></div><button class="icon-btn" id="d-close" aria-label="${esc(t('close'))}">✕</button></div>
     <div class="d-bd">
       <div class="sec"><h4>${esc(t('customer'))}</h4><div class="grid">
@@ -378,7 +375,7 @@ function drawDrawer() {
         <label class="f"><span>${esc(t('partNumbers'))}</span><textarea class="in" id="f-parts" rows="3">${esc(o.partNumbers)}</textarea></label>
         <div class="grid g2"><label class="f"><span>${esc(t('trackingNo'))}</span><input class="in" id="f-track" value="${esc(o.tracking)}"></label>
         <label class="f"><span>${esc(t('createdDate'))}</span><input class="in" id="f-created" type="date" value="${esc(o.createdDraft || toDateInput(createdTs))}"></label></div></div></div>
-      <div class="sec"><h4>${esc(t('progress'))}</h4>${o.draft && !anyStage ? `<div class="hint" style="margin-bottom:8px">${esc(t('draftHint'))}</div>` : ''}<div class="steps">${steps}</div></div>
+      <div class="sec"><h4>${esc(t('progress'))}</h4><div class="steps">${steps}</div></div>
       <div class="sec"><h4>${esc(t('notes'))}</h4><textarea class="in" id="f-notes" rows="3">${esc(o.notes)}</textarea></div>
       ${meta ? `<div class="meta">${esc(meta)}</div>` : ''}
     </div>
