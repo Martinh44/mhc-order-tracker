@@ -1,7 +1,7 @@
 // ── Order boards: JC Sportline (/jc/*) and PakTechz (/pt/*) ───────────
 // Every card is its own KV key (<board>:card:<key>), so a save, a delete or an incoming Shopify order can never
 // overwrite another card. Deleted cards move to <board>:deleted:<key> for 90 days and can be restored.
-// Shopify orders arrive through /webhook/shopify (MHJC + Vanté Automotive lines → JC, MHPT lines → PakTechz)
+// Shopify orders arrive through /webhook/shopify (JC parts of MHJC + Vanté Automotive, see isJcLine → JC; MHPT lines → PakTechz)
 // and start in Order Raised.
 //
 // JC history: until 2026-10-15 the JC board was one blob under KV key `orders`. That blob is never written again and
@@ -12,6 +12,14 @@ const BIN_TTL  = 90 * 24 * 3600;
 const MAX_BODY = 64 * 1024;
 const JC_VENDORS = ['mhjc', 'vanté automotive', 'vante automotive'];
 const PT_VENDORS = ['mhpt'];
+
+// Vendor alone isn't enough for JC: Vanté Automotive also holds our own MHC- parts, and MHJC has a couple.
+// No barcode (lookup failed or none set) means the part can't be identified, so it stays on the board rather than risk losing a JC order.
+export function isJcLine(line, barcode) {
+  if (!barcode) return true;
+  if ((line.vendor || '').toLowerCase().trim() === 'mhjc') return !/^MHC/i.test(barcode);
+  return /^(ML|JC|JP|JS)-/i.test(barcode);
+}
 
 // PakTechz ships regular orders by sea and express orders by air
 export const SHIPPING = ['sea', 'air'];
@@ -259,7 +267,11 @@ export async function addPaktechzOrder(env, order, fetchBarcodes) {
 }
 
 export async function addJcOrder(env, order, fetchBarcodes) {
-  const lines = linesFor(order, JC_VENDORS);
+  const vendorLines = linesFor(order, JC_VENDORS);
+  if (!vendorLines.length) return null;
+  // Order webhooks don't include barcodes, so look them up per variant
+  const barcodes = await fetchBarcodes(env, vendorLines.map(i => i.variant_id));
+  const lines = vendorLines.filter(i => isJcLine(i, barcodes[i.variant_id]));
   if (!lines.length) return null;
   await ensureJcMigrated(env);
   const b = BOARDS.jc, key = 'S' + order.id, sid = String(order.id);
@@ -267,8 +279,6 @@ export async function addJcOrder(env, order, fetchBarcodes) {
   const cards = await listPrefix(env, b.card);
   const binned = await listPrefix(env, b.bin);
   if ([...cards, ...binned].some(c => c.shopifyOrderId === sid)) return 'duplicate';   // cards from before the switch
-  // Order webhooks don't include barcodes, so look them up per variant; fall back to SKU then name
-  const barcodes = await fetchBarcodes(env, lines.map(i => i.variant_id));
   const now = Date.now();
   const card = {
     key, id: await nextJcId(env, [...cards, ...binned]), draft: false, ...customerFields(order),
